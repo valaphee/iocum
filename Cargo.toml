@@ -1,5 +1,7 @@
 [workspace]
 members = [
-    "http"
+    "bgs",
+    "http",
+    "tls"
 ]
 resolver = "2"

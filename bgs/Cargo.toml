@@ -1,5 +1,5 @@
 [package]
-name = "httpbogie"
+name = "bgsbogie"
 version = "0.0.0"
 edition = "2021"
 repository = "https://github.com/valaphee/bogie.git"
@@ -7,9 +7,10 @@ repository = "https://github.com/valaphee/bogie.git"
 [dependencies]
 clap = { version = "4.1.13", features = ["derive"] }
 futures-util = "0.3.27"
-hyper = { version = "1.0.0-rc.3", features = ["full"] }
+native-tls = "0.2.11"
 tokio = { version = "1.26.0", features = ["full"] }
 tokio-rustls = "0.24.0"
-webpki-roots = "0.23.0"
+tokio-tungstenite = { version = "0.18.0", features = ["native-tls"] }
+url = "2.3.1"
 
 tlsbogie = { path = "../tls" }

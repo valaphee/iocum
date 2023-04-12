@@ -1,216 +1,145 @@
-use std::{
-    cell::RefCell,
-    collections::{hash_map::Entry, HashMap},
-    convert::Infallible,
-    net::ToSocketAddrs,
-    sync::Arc,
+use std::{net::ToSocketAddrs, sync::Arc};
+
+use clap::{arg, Parser};
+use hyper::{
+    body::Incoming, client, http::uri::Authority, server, service::service_fn, Error, Request, Uri,
+};
+use tokio::net::{TcpListener, TcpStream};
+use tokio_rustls::{
+    rustls::{ClientConfig, OwnedTrustAnchor, RootCertStore, ServerConfig, ServerName},
+    TlsAcceptor, TlsConnector,
 };
 
-use clap::Parser;
-use http_body_util::Full;
-use hyper::{body::Bytes, server::conn::http2, service::service_fn, Request, Response};
-use openssl::{
-    asn1::Asn1Time,
-    bn::{BigNum, MsbOption},
-    hash::MessageDigest,
-    pkey::{PKey, Private},
-    rsa::Rsa,
-    x509::{
-        extension::{
-            AuthorityKeyIdentifier, BasicConstraints, SubjectAlternativeName, SubjectKeyIdentifier,
-        },
-        X509Builder, X509NameBuilder, X509,
-    },
-};
-use tokio::net::TcpListener;
-use tokio_rustls::{
-    rustls,
-    rustls::{
-        server::{ClientHello, ResolvesServerCert},
-        sign::CertifiedKey,
-        Certificate, PrivateKey, ServerConfig,
-    },
-    TlsAcceptor,
-};
+use tlsbogie::ResolvesServerCertAutogen;
 
 #[derive(Parser)]
-enum Arguments {
-    Client { address: String },
-    Server { address: String },
+struct Arguments {
+    #[arg(long)]
+    local_addr: Option<Uri>,
+    #[arg(long)]
+    remote_addr: Uri,
+    #[arg(long)]
+    default_sni: Option<String>,
 }
 
 #[tokio::main]
 async fn main() {
-    match Arguments::parse() {
-        Arguments::Client { .. } => {}
-        Arguments::Server { address } => {
-            let address = address.to_socket_addrs().unwrap().next().unwrap();
-            let listener = TcpListener::bind(address).await.unwrap();
+    let arguments = Arguments::parse();
 
-            let mut tls_config = ServerConfig::builder()
-                .with_safe_defaults()
-                .with_no_client_auth()
-                .with_cert_resolver(Arc::new(ResolvesServerCertAutogen::new()));
-            tls_config.alpn_protocols = vec![b"h2".to_vec()];
-            let tls_acceptor = TlsAcceptor::from(Arc::new(tls_config));
+    let local_addr = arguments.local_addr.unwrap();
+    let listener = TcpListener::bind(format!(
+        "{}:{}",
+        local_addr.host().unwrap(),
+        local_addr.port().map_or(443, |port| port.as_u16())
+    ))
+    .await
+    .unwrap();
 
-            loop {
-                let (stream, _) = listener.accept().await.unwrap();
-                let tls_acceptor = tls_acceptor.clone();
+    // setup tls server config
+    let mut tls_server_config = ServerConfig::builder()
+        .with_safe_defaults()
+        .with_no_client_auth()
+        .with_cert_resolver(Arc::new(ResolvesServerCertAutogen::new(
+            "certs",
+            arguments
+                .default_sni
+                .unwrap_or(local_addr.host().unwrap().to_string()),
+        )));
+    tls_server_config.alpn_protocols = vec![b"h2".to_vec()];
+    let tls_acceptor = TlsAcceptor::from(Arc::new(tls_server_config));
 
-                tokio::task::spawn(async move {
-                    let stream = tls_acceptor.accept(stream).await.unwrap();
-                    http2::Builder::new(TokioExecutor)
-                        .serve_connection(stream, service_fn(log))
+    // setup tls client config
+    let mut root_cert_store = RootCertStore::empty();
+    root_cert_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(
+        |trust_anchor| {
+            OwnedTrustAnchor::from_subject_spki_name_constraints(
+                trust_anchor.subject,
+                trust_anchor.spki,
+                trust_anchor.name_constraints,
+            )
+        },
+    ));
+    let mut tls_client_config = ClientConfig::builder()
+        .with_safe_defaults()
+        .with_root_certificates(root_cert_store)
+        .with_no_client_auth();
+    tls_client_config.alpn_protocols = vec![b"h2".to_vec()];
+    let tls_connector = TlsConnector::from(Arc::new(tls_client_config));
+
+    let remote_addr = format!(
+        "{}:{}",
+        arguments.remote_addr.host().unwrap(),
+        arguments
+            .remote_addr
+            .port()
+            .map_or(443, |port| port.as_u16())
+    )
+    .to_socket_addrs()
+    .unwrap()
+    .next()
+    .unwrap();
+    let remote_host = arguments.remote_addr.host().unwrap().to_string();
+
+    loop {
+        let (stream, _) = listener.accept().await.unwrap();
+        let tls_acceptor = tls_acceptor.clone();
+        let tls_connector = tls_connector.clone();
+        let remote_host = remote_host.clone();
+
+        tokio::task::spawn(async move {
+            let stream = tls_acceptor.accept(stream).await.unwrap();
+            let service = service_fn(move |request: Request<Incoming>| {
+                println!("----BEGIN HTTP REQUEST-----");
+                println!(
+                    "{} {} {:?}",
+                    request.method(),
+                    request.uri().path_and_query().unwrap().as_str(),
+                    request.version()
+                );
+                for (header_name, header_value) in request.headers().iter() {
+                    println!("{}: {}", header_name, header_value.to_str().unwrap());
+                }
+                println!("----END HTTP REQUEST-----");
+
+                let tls_connector = tls_connector.clone();
+                let remote_host = remote_host.clone();
+
+                let (mut parts, body) = request.into_parts();
+                let mut uri_parts = parts.uri.into_parts();
+                uri_parts.authority = Some(Authority::try_from(remote_host.clone()).unwrap());
+                parts.uri = Uri::from_parts(uri_parts).unwrap();
+                let request = Request::from_parts(parts, body);
+
+                async move {
+                    let stream = TcpStream::connect(&remote_addr).await.unwrap();
+                    let stream = tls_connector
+                        .connect(ServerName::try_from(remote_host.as_str()).unwrap(), stream)
                         .await
                         .unwrap();
-                });
-            }
-        }
-    }
-}
-
-async fn log(_: Request<hyper::body::Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
-    Ok(Response::new(Full::new(Bytes::from("Hello, World!"))))
-}
-
-struct ResolvesServerCertAutogen {
-    ca_key_pair: PKey<Private>,
-    ca_cert: X509,
-
-    issued_certs: RefCell<HashMap<String, Arc<CertifiedKey>>>,
-}
-
-unsafe impl Sync for ResolvesServerCertAutogen {}
-
-impl ResolvesServerCertAutogen {
-    fn new() -> Self {
-        let ca_key_pair = PKey::from_rsa(Rsa::generate(2048).unwrap()).unwrap();
-
-        let mut ca_cert_name = X509NameBuilder::new().unwrap();
-        ca_cert_name
-            .append_entry_by_text("CN", "malebolge")
-            .unwrap();
-        let ca_cert_name = ca_cert_name.build();
-
-        let mut ca_cert = X509Builder::new().unwrap();
-        ca_cert
-            .set_not_before(&Asn1Time::days_from_now(0).unwrap())
-            .unwrap();
-        ca_cert
-            .set_not_after(&Asn1Time::days_from_now(365).unwrap())
-            .unwrap();
-        ca_cert.set_version(2).unwrap();
-        ca_cert
-            .set_serial_number({
-                let mut serial_number = BigNum::new().unwrap();
-                serial_number
-                    .rand(159, MsbOption::MAYBE_ZERO, false)
-                    .unwrap();
-                &serial_number.to_asn1_integer().unwrap()
-            })
-            .unwrap();
-        ca_cert.set_issuer_name(&ca_cert_name).unwrap();
-        ca_cert.set_subject_name(&ca_cert_name).unwrap();
-        ca_cert.set_pubkey(&ca_key_pair).unwrap();
-        ca_cert
-            .append_extension(BasicConstraints::new().critical().ca().build().unwrap())
-            .unwrap();
-        ca_cert
-            .append_extension(
-                SubjectKeyIdentifier::new()
-                    .build(&ca_cert.x509v3_context(None, None))
-                    .unwrap(),
-            )
-            .unwrap();
-        ca_cert.sign(&ca_key_pair, MessageDigest::sha256()).unwrap();
-
-        Self {
-            ca_key_pair,
-            ca_cert: ca_cert.build(),
-            issued_certs: RefCell::new(Default::default()),
-        }
-    }
-}
-
-impl ResolvesServerCert for ResolvesServerCertAutogen {
-    fn resolve(&self, client_hello: ClientHello) -> Option<Arc<CertifiedKey>> {
-        if let Some(name) = client_hello.server_name() {
-            Some(
-                match self.issued_certs.borrow_mut().entry(name.to_string()) {
-                    Entry::Occupied(entry) => entry.get().clone(),
-                    Entry::Vacant(entry) => {
-                        let key_pair = PKey::from_rsa(Rsa::generate(2048).unwrap()).unwrap();
-
-                        let mut cert_name = X509NameBuilder::new().unwrap();
-                        cert_name.append_entry_by_text("CN", name).unwrap();
-                        let cert_name = cert_name.build();
-
-                        let mut cert = X509Builder::new().unwrap();
-                        cert.set_not_before(&Asn1Time::days_from_now(0).unwrap())
+                    let (mut sender, connection) =
+                        client::conn::http2::handshake(TokioExecutor, stream)
+                            .await
                             .unwrap();
-                        cert.set_not_after(&Asn1Time::days_from_now(365).unwrap())
-                            .unwrap();
-                        cert.set_version(2).unwrap();
-                        cert.set_serial_number({
-                            let mut serial_number = BigNum::new().unwrap();
-                            serial_number
-                                .rand(159, MsbOption::MAYBE_ZERO, false)
-                                .unwrap();
-                            &serial_number.to_asn1_integer().unwrap()
-                        })
-                        .unwrap();
-                        cert.set_issuer_name(self.ca_cert.subject_name()).unwrap();
-                        cert.set_subject_name(&cert_name).unwrap();
-                        cert.set_pubkey(&key_pair).unwrap();
-                        cert.append_extension(BasicConstraints::new().build().unwrap())
-                            .unwrap();
-                        cert.append_extension(
-                            SubjectKeyIdentifier::new()
-                                .build(&cert.x509v3_context(Some(&self.ca_cert), None))
-                                .unwrap(),
-                        )
-                        .unwrap();
-                        cert.append_extension(
-                            AuthorityKeyIdentifier::new()
-                                .keyid(false)
-                                .issuer(false)
-                                .build(&cert.x509v3_context(Some(&self.ca_cert), None))
-                                .unwrap(),
-                        )
-                        .unwrap();
-                        cert.append_extension(
-                            SubjectAlternativeName::new()
-                                .dns(name)
-                                .build(&cert.x509v3_context(Some(&self.ca_cert), None))
-                                .unwrap(),
-                        )
-                        .unwrap();
-                        cert.sign(&self.ca_key_pair, MessageDigest::sha256())
-                            .unwrap();
-                        let cert = cert.build();
+                    tokio::task::spawn(async move {
+                        connection.await.unwrap();
+                    });
 
-                        entry
-                            .insert(
-                                CertifiedKey::new(
-                                    vec![
-                                        Certificate(cert.to_der().unwrap()),
-                                        Certificate(self.ca_cert.to_der().unwrap()),
-                                    ],
-                                    rustls::sign::any_supported_type(&PrivateKey(
-                                        key_pair.private_key_to_der().unwrap(),
-                                    ))
-                                    .unwrap(),
-                                )
-                                .into(),
-                            )
-                            .clone()
+                    let response = sender.send_request(request).await.unwrap();
+                    println!("----BEGIN HTTP RESPONSE-----");
+                    println!("{:?} {}", response.version(), response.status().as_str());
+                    for (header_name, header_value) in response.headers().iter() {
+                        println!("{}: {}", header_name, header_value.to_str().unwrap());
                     }
-                },
-            )
-        } else {
-            None
-        }
+                    println!("----END HTTP RESPONSE-----");
+
+                    Ok::<_, Error>(response)
+                }
+            });
+            server::conn::http2::Builder::new(TokioExecutor)
+                .serve_connection(stream, service)
+                .await
+                .unwrap();
+        });
     }
 }
 

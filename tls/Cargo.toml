@@ -1,0 +1,9 @@
+[package]
+name = "tlsbogie"
+version = "0.0.0"
+edition = "2021"
+repository = "https://github.com/valaphee/bogie.git"
+
+[dependencies]
+openssl = "0.10.48"
+rustls = "0.21.0"

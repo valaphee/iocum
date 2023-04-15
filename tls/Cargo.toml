@@ -5,5 +5,5 @@ edition = "2021"
 repository = "https://github.com/valaphee/bogie.git"
 
 [dependencies]
-openssl = "0.10.48"
+openssl = "0.10.50"
 rustls = "0.21.0"

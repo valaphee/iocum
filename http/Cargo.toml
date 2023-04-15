@@ -5,10 +5,10 @@ edition = "2021"
 repository = "https://github.com/valaphee/bogie.git"
 
 [dependencies]
-clap = { version = "4.1.13", features = ["derive"] }
-futures-util = "0.3.27"
+clap = { version = "4.2.1", features = ["derive"] }
+futures-util = "0.3.28"
 hyper = { version = "1.0.0-rc.3", features = ["full"] }
-tokio = { version = "1.26.0", features = ["full"] }
+tokio = { version = "1.27.0", features = ["full"] }
 tokio-rustls = "0.24.0"
 webpki-roots = "0.23.0"
 

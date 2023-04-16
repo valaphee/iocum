@@ -9,11 +9,13 @@ byteorder = "1.4.3"
 clap = { version = "4.2.1", features = ["derive"] }
 futures-util = "0.3.28"
 hex = { version = "0.4.3", features = ["serde"] }
+kmp = "0.1.1"
 native-tls = "0.2.11"
+openssl = "0.10.50"
 prost = "0.11.9"
 prost-types = "0.11.9"
 rand = "0.8.5"
-rsa = "0.8.2"
+rsa = { version = "0.8.2", features = ["sha2"] }
 serde = { version = "1.0.160", features = ["derive"] }
 serde_json = "1.0.96"
 sha2 = "0.10.6"
@@ -25,4 +27,5 @@ url = "2.3.1"
 tlsbogie = { path = "../tls" }
 
 [build-dependencies]
+glob = "0.3.1"
 prost-build = "0.11.9"

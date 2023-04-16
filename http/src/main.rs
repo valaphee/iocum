@@ -69,6 +69,7 @@ async fn main() {
         tls_client_config.alpn_protocols = vec![b"h2".to_vec()];
         let tls_connector = TlsConnector::from(Arc::new(tls_client_config));
 
+        let remote_host = remote_addr.host().unwrap().to_string();
         let remote_addr = format!(
             "{}:{}",
             remote_addr.host().unwrap(),
@@ -78,7 +79,6 @@ async fn main() {
         .unwrap()
         .next()
         .unwrap();
-        let remote_host = arguments.remote_addr.host().unwrap().to_string();
 
         loop {
             let (stream, _) = listener.accept().await.unwrap();

@@ -1,0 +1,25 @@
+/* AUTO-GENERATED FILE. DO NOT MODIFY.
+*/
+syntax = "proto2";
+
+package Blizzard.Telemetry.App;
+
+import "telemetry_extensions.proto";
+
+option java_multiple_files = true;
+
+option (TelemetryFileOptions).telemetry_message = "LibraryStats";
+
+message LibraryStats {
+  option (TelemetryMessageOptions).realtime = true;
+  
+  repeated string my_games = 1;
+  optional string my_games_serialized = 2;
+  optional uint32 num_my_games = 3;
+  repeated string installed_games = 4;
+  optional string installed_games_serialized = 5;
+  optional uint32 num_installed_games = 6;
+  repeated string favorite_games = 7;
+  optional string favorite_games_serialized = 8;
+  optional uint32 num_favorite_games = 9;
+}

@@ -1,0 +1,20 @@
+/* AUTO-GENERATED FILE. DO NOT MODIFY.
+*/
+syntax = "proto2";
+
+package Blizzard.Telemetry.App;
+
+import "telemetry_extensions.proto";
+
+option java_multiple_files = true;
+
+option (TelemetryFileOptions).telemetry_message = "CommandLineError";
+
+message CommandLineError {
+  option (TelemetryMessageOptions).realtime = true;
+  
+  optional string error = 1;
+  optional string option = 2;
+  repeated string args = 3;
+  optional string args_serialized = 4;
+}

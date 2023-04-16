@@ -1,0 +1,22 @@
+/* AUTO-GENERATED FILE. DO NOT MODIFY.
+*/
+syntax = "proto2";
+
+package Blizzard.Telemetry.App;
+
+import "telemetry_extensions.proto";
+
+option java_multiple_files = true;
+
+option (TelemetryFileOptions).telemetry_message = "SuggestedFriends";
+
+message SuggestedFriends {
+  option (TelemetryMessageOptions).realtime = true;
+  
+  optional uint32 total_suggested_friends_count = 1;
+  optional uint32 friends_of_friends_count = 2;
+  optional bool is_friends_of_friends_partial = 3;
+  optional uint32 recently_played_with_count = 4;
+  optional uint32 facebook_error_code = 5;
+  optional uint32 facebook_friends_count = 6;
+}

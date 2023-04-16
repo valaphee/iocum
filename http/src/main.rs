@@ -89,7 +89,7 @@ async fn main() {
             tokio::task::spawn(async move {
                 let stream = tls_acceptor.accept(stream).await.unwrap();
                 let service = service_fn(move |request: Request<Incoming>| {
-                    println!("----BEGIN HTTP REQUEST-----");
+                    println!("-----BEGIN HTTP REQUEST-----");
                     println!(
                         "{} {} {:?}",
                         request.method(),
@@ -99,7 +99,7 @@ async fn main() {
                     for (header_name, header_value) in request.headers().iter() {
                         println!("{}: {}", header_name, header_value.to_str().unwrap());
                     }
-                    println!("----END HTTP REQUEST-----");
+                    println!("-----END HTTP REQUEST-----");
 
                     let tls_connector = tls_connector.clone();
                     let remote_host = remote_host.clone();

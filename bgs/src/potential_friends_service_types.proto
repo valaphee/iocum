@@ -1,0 +1,47 @@
+/* AUTO-GENERATED FILE. DO NOT MODIFY.
+*/
+syntax = "proto2";
+
+package bna.rpc;
+
+import "rpc_core.proto";
+
+option java_multiple_files = true;
+
+enum PotentialFriendsKind {
+  POTENTIAL_FRIENDS_KIND_FRIENDS_OF_FRIENDS = 1;
+  POTENTIAL_FRIENDS_KIND_RECENTLY_PLAYED_WITH = 2;
+  POTENTIAL_FRIENDS_KIND_FACEBOOK = 3;
+}
+
+enum PotentialFriendsStatus {
+  POTENTIAL_FRIENDS_STATUS_NOT_READY = 1;
+  POTENTIAL_FRIENDS_STATUS_PARTIAL_DATA_AVAILABLE = 2;
+  POTENTIAL_FRIENDS_STATUS_COMPLETE_DATA_AVAILABLE = 3;
+  POTENTIAL_FRIENDS_STATUS_EXTERNAL_AUTH_WAIT = 4;
+  POTENTIAL_FRIENDS_STATUS_ERROR_GENERIC = 100;
+  POTENTIAL_FRIENDS_STATUS_ERROR_FACEBOOK_ACCOUNT_LINK_REQUIRED = 101;
+  POTENTIAL_FRIENDS_STATUS_ERROR_FACEBOOK_PERMISSION_REQUIRED = 102;
+  POTENTIAL_FRIENDS_STATUS_ERROR_FACEBOOK_BAM_UNBLOCK_REQUIRED = 103;
+}
+
+message PotentialFriend {
+  message RecentPlay {
+    optional string program_id = 1;
+    optional uint64 timestamp = 2;
+  }
+  
+  optional string account_id = 1;
+  optional string full_name = 2;
+  optional string battle_tag = 3;
+  optional uint32 avatar_id = 4;
+  optional string facebook_full_name = 5;
+  optional string facebook_picture_url = 6;
+  optional bool is_friend = 7;
+  optional bool is_blocked = 8;
+  optional bool is_new = 9;
+  optional bool is_invited = 10;
+  repeated string mutual_friends_ids = 11;
+  repeated .bna.rpc.PotentialFriend.RecentPlay recent_plays = 12;
+  repeated .bna.rpc.PotentialFriendsKind friendships = 13;
+}

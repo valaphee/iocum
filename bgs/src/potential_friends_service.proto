@@ -1,0 +1,144 @@
+/* AUTO-GENERATED FILE. DO NOT MODIFY.
+*/
+syntax = "proto2";
+
+package bna.rpc;
+
+import "rpc_core.proto";
+import "potential_friends_service_types.proto";
+
+option java_multiple_files = true;
+option java_generic_services = true;
+
+option cc_generic_services = false;
+
+message SubscribePotentialFriendsResponse {
+  repeated .bna.rpc.PotentialFriend potential_friends = 1;
+  optional .bna.rpc.PotentialFriendsStatus friends_of_friends_status = 2;
+  optional .bna.rpc.PotentialFriendsStatus recently_played_with_status = 3;
+  optional .bna.rpc.PotentialFriendsStatus facebook_status = 4;
+}
+
+message SubscribeFriendsOfFriendRequest {
+  optional string account_id = 1;
+}
+
+message SubscribeFriendsOfFriendResponse {
+  repeated .bna.rpc.PotentialFriend friends = 1;
+  optional bool is_fetching = 2;
+}
+
+message UnsubscribeFriendsOfFriendRequest {
+  optional string account_id = 1;
+}
+
+message PotentialFriendsAddedNotification {
+  repeated .bna.rpc.PotentialFriend potential_friends = 1;
+}
+
+message PotentialFriendsRemovedNotification {
+  repeated string account_ids = 1;
+}
+
+message PotentialFriendsUpdatedNotification {
+  repeated .bna.rpc.PotentialFriend potential_friends = 1;
+}
+
+message FriendsOfFriendAddedNotification {
+  repeated .bna.rpc.PotentialFriend friends = 1;
+}
+
+message FriendsOfFriendRemovedNotification {
+  repeated string account_ids = 1;
+}
+
+message FriendsOfFriendUpdatedNotification {
+  repeated .bna.rpc.PotentialFriend friends = 1;
+}
+
+message PotentialFriendsStatusUpdatedNotification {
+  optional .bna.rpc.PotentialFriendsStatus friends_of_friends_status = 1;
+  optional .bna.rpc.PotentialFriendsStatus recently_played_with_status = 2;
+  optional .bna.rpc.PotentialFriendsStatus facebook_status = 3;
+}
+
+message FriendsOfFriendCompletedNotification {
+  optional bool success = 1;
+  optional string account_id = 2;
+}
+
+message GetOrQueryAvatarIdRequest {
+  optional string account_id = 1;
+}
+
+message GetOrQueryAvatarIdResponse {
+  optional string account_id = 1;
+  optional uint32 avatar_id = 2;
+}
+
+message AvatarIdAvailableNotification {
+  optional string account_id = 1;
+  optional uint32 avatar_id = 2;
+}
+
+service PotentialFriendsService {
+  rpc SubscribePotentialFriends (.bna.rpc.NoData) returns (.bna.rpc.SubscribePotentialFriendsResponse) {
+  }
+  
+  rpc UnsubscribePotentialFriends (.bna.rpc.NoData) returns (.bna.rpc.NoData) {
+  }
+  
+  rpc SubscribeFriendsOfFriend (.bna.rpc.SubscribeFriendsOfFriendRequest) returns (.bna.rpc.SubscribeFriendsOfFriendResponse) {
+  }
+  
+  rpc UnsubscribeFriendsOfFriend (.bna.rpc.UnsubscribeFriendsOfFriendRequest) returns (.bna.rpc.NoData) {
+  }
+  
+  rpc BeginFacebookAccountLink (.bna.rpc.NoData) returns (.bna.rpc.NoData) {
+  }
+  
+  rpc BeginFacebookEditPermission (.bna.rpc.NoData) returns (.bna.rpc.NoData) {
+  }
+  
+  rpc CancelFacebookAction (.bna.rpc.NoData) returns (.bna.rpc.NoData) {
+  }
+  
+  rpc RefreshFacebookFriends (.bna.rpc.NoData) returns (.bna.rpc.NoData) {
+  }
+  
+  rpc GetOrQueryAvatarId (.bna.rpc.GetOrQueryAvatarIdRequest) returns (.bna.rpc.GetOrQueryAvatarIdResponse) {
+  }
+  
+  rpc PotentialFriendsAdded (.bna.rpc.NoData) returns (.bna.rpc.PotentialFriendsAddedNotification) {
+  }
+  
+  rpc PotentialFriendsRemoved (.bna.rpc.NoData) returns (.bna.rpc.PotentialFriendsRemovedNotification) {
+  }
+  
+  rpc PotentialFriendsUpdated (.bna.rpc.NoData) returns (.bna.rpc.PotentialFriendsUpdatedNotification) {
+  }
+  
+  rpc PotentialFriendsCleared (.bna.rpc.NoData) returns (.bna.rpc.NoData) {
+  }
+  
+  rpc PotentialFriendsStatusUpdated (.bna.rpc.NoData) returns (.bna.rpc.PotentialFriendsStatusUpdatedNotification) {
+  }
+  
+  rpc FriendsOfFriendCompleted (.bna.rpc.NoData) returns (.bna.rpc.FriendsOfFriendCompletedNotification) {
+  }
+  
+  rpc FriendsOfFriendAdded (.bna.rpc.NoData) returns (.bna.rpc.FriendsOfFriendAddedNotification) {
+  }
+  
+  rpc FriendsOfFriendRemoved (.bna.rpc.NoData) returns (.bna.rpc.FriendsOfFriendRemovedNotification) {
+  }
+  
+  rpc FriendsOfFriendUpdated (.bna.rpc.NoData) returns (.bna.rpc.FriendsOfFriendUpdatedNotification) {
+  }
+  
+  rpc FriendsOfFriendCleared (.bna.rpc.NoData) returns (.bna.rpc.NoData) {
+  }
+  
+  rpc AvatarIdAvailable (.bna.rpc.NoData) returns (.bna.rpc.AvatarIdAvailableNotification) {
+  }
+}

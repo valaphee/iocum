@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::SystemTime};
+use std::{path::PathBuf, sync::Arc, time::SystemTime};
 
 use clap::{arg, Parser};
 use futures_util::{SinkExt, StreamExt};
@@ -70,7 +70,7 @@ async fn main() {
             let tls_acceptor = TlsAcceptor::from(Arc::new(tls_server_config));
 
             loop {
-                let (stream, _) = listener.accept().await.unwrap();
+                let (stream, address) = listener.accept().await.unwrap();
                 let tls_acceptor = tls_acceptor.clone();
                 let remote_uri = remote_uri.clone();
 
@@ -79,7 +79,7 @@ async fn main() {
                     let mut stream = tokio_tungstenite::accept_hdr_async(
                         stream,
                         |request: &server::Request, mut response: server::Response| {
-                            println!("-----BEGIN HTTP REQUEST-----");
+                            println!("<< {address}");
                             println!(
                                 "{} {} {:?}",
                                 request.method(),
@@ -89,7 +89,6 @@ async fn main() {
                             for (header_name, header_value) in request.headers().iter() {
                                 println!("{}: {}", header_name, header_value.to_str().unwrap());
                             }
-                            println!("-----END HTTP REQUEST-----");
 
                             response.headers_mut().append(
                                 "sec-websocket-protocol",
@@ -120,24 +119,20 @@ async fn main() {
                         )
                         .await
                         .unwrap();
-                    println!("-----BEGIN HTTP RESPONSE-----");
+                    println!(">> {address}");
                     println!("{:?} {}", response.version(), response.status().as_str());
                     for (header_name, header_value) in response.headers().iter() {
                         println!("{}: {}", header_name, header_value.to_str().unwrap());
                     }
-                    println!("-----END HTTP RESPONSE-----");
 
-                    let mut pending_responses = HashMap::new();
                     loop {
                         tokio::select! {
                             message = stream.next() => {
                                 let message = message.unwrap().unwrap();
-                                bgs::print_bgs(message.clone(), &mut pending_responses, false);
                                 remote_stream.send(message).await.unwrap();
                             }
                             message = remote_stream.next() => {
                                 let message = message.unwrap().unwrap();
-                                bgs::print_bgs(message.clone(), &mut pending_responses, true);
                                 stream.send(message).await.unwrap();
                             }
                         }

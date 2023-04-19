@@ -1,5 +1,3 @@
-extern crate core;
-
 use std::{net::ToSocketAddrs, sync::Arc};
 
 use clap::{arg, Parser};
@@ -98,7 +96,7 @@ async fn main() {
     .unwrap();
 
     loop {
-        let (stream, _) = listener.accept().await.unwrap();
+        let (stream, address) = listener.accept().await.unwrap();
         let tls_acceptor = tls_acceptor.clone();
         let tls_connector = tls_connector.clone();
         let remote_host = remote_host.clone();
@@ -106,7 +104,7 @@ async fn main() {
         tokio::task::spawn(async move {
             let stream = tls_acceptor.accept(stream).await.unwrap();
             let service = service_fn(move |mut request: Request<Incoming>| {
-                println!("-----BEGIN HTTP REQUEST-----");
+                println!("<< {address}");
                 println!(
                     "{} {} {:?}",
                     request.method(),
@@ -116,7 +114,6 @@ async fn main() {
                 for (header_name, header_value) in request.headers().iter() {
                     println!("{}: {}", header_name, header_value.to_str().unwrap());
                 }
-                println!("-----END HTTP REQUEST-----");
 
                 let tls_connector = tls_connector.clone();
                 let remote_host = remote_host.clone();
@@ -158,12 +155,11 @@ async fn main() {
                         sender.send_request(request).await.unwrap()
                     };
 
-                    println!("-----BEGIN HTTP RESPONSE-----");
+                    println!(">> {address}");
                     println!("{:?} {}", response.version(), response.status().as_str());
                     for (header_name, header_value) in response.headers().iter() {
                         println!("{}: {}", header_name, header_value.to_str().unwrap());
                     }
-                    println!("-----END HTTP RESPONSE-----");
 
                     Ok::<_, Error>(response)
                 }

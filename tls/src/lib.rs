@@ -40,6 +40,8 @@ unsafe impl Sync for ResolvesServerCertAutogen {}
 impl ResolvesServerCertAutogen {
     pub fn new<P: AsRef<Path>>(path: P, default_sni: String) -> Self {
         let path = path.as_ref().to_path_buf();
+        std::fs::create_dir_all(path.clone()).unwrap();
+
         let (ca_key_pair, ca_cert) = if let (Ok(ca_cert_pem), Ok(ca_private_key_pem)) = (
             std::fs::read(path.join("root.crt")),
             std::fs::read(path.join("root.pvk")),

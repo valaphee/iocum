@@ -20,9 +20,7 @@ use tokio_tungstenite::{
 };
 use url::Url;
 
-use tlsbogie::ResolvesServerCertAutogen;
-
-include!(concat!(env!("OUT_DIR"), "/_.rs"));
+use staxtls::ResolvesServerCertAutogen;
 
 mod bgs;
 
@@ -147,7 +145,7 @@ async fn main() {
         }
         Arguments::Patch { file } => {
             let public_key =
-                RsaPublicKey::from_public_key_pem(include_str!("blizzard_certificate_bundle.pvk"))
+                RsaPublicKey::from_public_key_pem(include_str!("blizzard_certificate_bundle.pub"))
                     .unwrap();
             let public_key_n = public_key.n().to_bytes_le();
 

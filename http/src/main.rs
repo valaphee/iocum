@@ -1,16 +1,17 @@
 extern crate core;
 
 use std::{net::ToSocketAddrs, sync::Arc};
-use std::collections::{hash_map, HashMap};
-use std::fs::File;
-use std::io::Read;
 
 use clap::{arg, Parser};
-use flate2::read::GzDecoder;
-use http_body_util::{BodyExt, Full};
-use hyper::{body::Incoming, client, http::uri::Authority, server, service::service_fn, Error, Request, Uri, Response};
-use hyper::body::Bytes;
-use hyper::header::{HeaderValue, SET_COOKIE};
+use hyper::{
+    body::Incoming,
+    client,
+    header::{HeaderValue, HOST},
+    http::uri::Authority,
+    server,
+    service::service_fn,
+    Error, Request, Uri,
+};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::{
     rustls::{ClientConfig, OwnedTrustAnchor, RootCertStore, ServerConfig, ServerName},
@@ -22,30 +23,32 @@ use staxtls::ResolvesServerCertAutogen;
 #[derive(Parser)]
 enum Arguments {
     Mitm {
-        remote_addr: Uri,
+        remote_uri: Uri,
         #[arg(long)]
-        local_addr: Option<Uri>,
+        local_uri: Option<Uri>,
+
         #[arg(long)]
         default_sni: Option<String>,
+
         #[arg(long)]
-        dump: bool
+        http2: bool,
     },
 }
 
 #[tokio::main]
 async fn main() {
     let Arguments::Mitm {
-        remote_addr,
-        local_addr,
+        remote_uri,
+        local_uri,
         default_sni,
-        dump: _,
+        http2,
     } = Arguments::parse();
 
-    let local_addr = local_addr.unwrap();
+    let local_uri = local_uri.unwrap();
     let listener = TcpListener::bind(format!(
         "{}:{}",
-        local_addr.host().unwrap(),
-        local_addr.port().map_or(443, |port| port.as_u16())
+        local_uri.host().unwrap(),
+        local_uri.port().map_or(443, |port| port.as_u16())
     ))
     .await
     .unwrap();
@@ -56,9 +59,11 @@ async fn main() {
         .with_no_client_auth()
         .with_cert_resolver(Arc::new(ResolvesServerCertAutogen::new(
             "certs",
-            default_sni.unwrap_or(local_addr.host().unwrap().to_string()),
+            default_sni.unwrap_or(local_uri.host().unwrap().to_string()),
         )));
-    tls_server_config.alpn_protocols = vec![b"h2".to_vec()];
+    if http2 {
+        tls_server_config.alpn_protocols = vec![b"h2".to_vec()];
+    }
     let tls_acceptor = TlsAcceptor::from(Arc::new(tls_server_config));
 
     // setup tls client config
@@ -76,14 +81,16 @@ async fn main() {
         .with_safe_defaults()
         .with_root_certificates(root_cert_store)
         .with_no_client_auth();
-    tls_client_config.alpn_protocols = vec![b"h2".to_vec()];
+    if http2 {
+        tls_client_config.alpn_protocols = vec![b"h2".to_vec()];
+    }
     let tls_connector = TlsConnector::from(Arc::new(tls_client_config));
 
-    let remote_host = remote_addr.host().unwrap().to_string();
+    let remote_host = remote_uri.host().unwrap().to_string();
     let remote_addr = format!(
         "{}:{}",
-        remote_addr.host().unwrap(),
-        remote_addr.port().map_or(443, |port| port.as_u16())
+        remote_uri.host().unwrap(),
+        remote_uri.port().map_or(443, |port| port.as_u16())
     )
     .to_socket_addrs()
     .unwrap()
@@ -98,7 +105,7 @@ async fn main() {
 
         tokio::task::spawn(async move {
             let stream = tls_acceptor.accept(stream).await.unwrap();
-            let service = service_fn(move |request: Request<Incoming>| {
+            let service = service_fn(move |mut request: Request<Incoming>| {
                 println!("-----BEGIN HTTP REQUEST-----");
                 println!(
                     "{} {} {:?}",
@@ -114,13 +121,17 @@ async fn main() {
                 let tls_connector = tls_connector.clone();
                 let remote_host = remote_host.clone();
 
-                let request = {
-                    // rewrite uri authority
+                let request = if http2 {
                     let (mut request_parts, request_body) = request.into_parts();
                     let mut uri_parts = request_parts.uri.into_parts();
                     uri_parts.authority = Some(Authority::try_from(remote_host.clone()).unwrap());
                     request_parts.uri = Uri::from_parts(uri_parts).unwrap();
                     Request::from_parts(request_parts, request_body)
+                } else {
+                    request
+                        .headers_mut()
+                        .insert(HOST, HeaderValue::from_str(&remote_host).unwrap());
+                    request
                 };
 
                 async move {
@@ -129,15 +140,24 @@ async fn main() {
                         .connect(ServerName::try_from(remote_host.as_str()).unwrap(), stream)
                         .await
                         .unwrap();
-                    let (mut sender, connection) =
-                        client::conn::http2::handshake(TokioExecutor, stream)
-                            .await
-                            .unwrap();
-                    tokio::task::spawn(async move {
-                        connection.await.unwrap();
-                    });
+                    let response = if http2 {
+                        let (mut sender, connection) =
+                            client::conn::http2::handshake(TokioExecutor, stream)
+                                .await
+                                .unwrap();
+                        tokio::task::spawn(async move {
+                            connection.await.unwrap();
+                        });
+                        sender.send_request(request).await.unwrap()
+                    } else {
+                        let (mut sender, connection) =
+                            client::conn::http1::handshake(stream).await.unwrap();
+                        tokio::task::spawn(async move {
+                            connection.await.unwrap();
+                        });
+                        sender.send_request(request).await.unwrap()
+                    };
 
-                    let mut response = sender.send_request(request).await.unwrap();
                     println!("-----BEGIN HTTP RESPONSE-----");
                     println!("{:?} {}", response.version(), response.status().as_str());
                     for (header_name, header_value) in response.headers().iter() {
@@ -145,30 +165,20 @@ async fn main() {
                     }
                     println!("-----END HTTP RESPONSE-----");
 
-                    // remove set-cookie header domain
-                    if let Some(mut cookie_header) = response.headers_mut().get_mut(SET_COOKIE) {
-                        let value = cookie_header.to_str().unwrap();
-                        *cookie_header = HeaderValue::from_str(&value.split(';').filter_map(|key_value_pair| {
-                            let mut key_value_split = key_value_pair.splitn(2, '=');
-                            let key = key_value_split.next().unwrap().trim();
-                            if key == "domain" {
-                                return None;
-                            }
-                            Some(if let Some(value) = key_value_split.next() {
-                                format!("{key}={value}")
-                            } else {
-                                format!("{key}")
-                            })
-                        }).collect::<Vec<_>>().join(";")).unwrap();
-                    }
-
                     Ok::<_, Error>(response)
                 }
             });
-            server::conn::http2::Builder::new(TokioExecutor)
-                .serve_connection(stream, service)
-                .await
-                .unwrap();
+            if http2 {
+                server::conn::http2::Builder::new(TokioExecutor)
+                    .serve_connection(stream, service)
+                    .await
+                    .unwrap();
+            } else {
+                server::conn::http1::Builder::new()
+                    .serve_connection(stream, service)
+                    .await
+                    .unwrap();
+            }
         });
     }
 }

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc, time::SystemTime};
 
 use clap::{arg, Parser};
 use futures_util::{SinkExt, StreamExt};
@@ -27,14 +27,16 @@ mod bgs;
 #[derive(Parser)]
 enum Arguments {
     Mitm {
-        remote_addr: Url,
+        remote_uri: Url,
         #[arg(long)]
-        local_addr: Option<Url>,
+        local_uri: Option<Url>,
+
         #[arg(long)]
         default_sni: Option<String>,
     },
     Patch {
         file: PathBuf,
+        uris: Vec<String>,
     },
 }
 
@@ -42,13 +44,13 @@ enum Arguments {
 async fn main() {
     match Arguments::parse() {
         Arguments::Mitm {
-            remote_addr,
-            local_addr,
+            remote_uri,
+            local_uri,
             default_sni,
         } => {
-            let local_addr = local_addr.unwrap();
+            let local_uri = local_uri.unwrap();
             let listener = TcpListener::bind(
-                local_addr
+                local_uri
                     .socket_addrs(|| Some(1119))
                     .unwrap()
                     .first()
@@ -63,14 +65,14 @@ async fn main() {
                 .with_no_client_auth()
                 .with_cert_resolver(Arc::new(ResolvesServerCertAutogen::new(
                     "certs",
-                    default_sni.unwrap_or(local_addr.host().unwrap().to_string()),
+                    default_sni.unwrap_or(local_uri.host().unwrap().to_string()),
                 )));
             let tls_acceptor = TlsAcceptor::from(Arc::new(tls_server_config));
 
             loop {
                 let (stream, _) = listener.accept().await.unwrap();
                 let tls_acceptor = tls_acceptor.clone();
-                let remote_addr = remote_addr.clone();
+                let remote_uri = remote_uri.clone();
 
                 tokio::task::spawn(async move {
                     let stream = tls_acceptor.accept(stream).await.unwrap();
@@ -100,7 +102,7 @@ async fn main() {
                     .await
                     .unwrap();
 
-                    let mut request = remote_addr.into_client_request().unwrap();
+                    let mut request = remote_uri.into_client_request().unwrap();
                     request.headers_mut().append(
                         "sec-websocket-protocol",
                         "v1.rpc.battle.net".parse().unwrap(),
@@ -143,11 +145,12 @@ async fn main() {
                 });
             }
         }
-        Arguments::Patch { file } => {
+        Arguments::Patch { file, uris } => {
             let public_key =
                 RsaPublicKey::from_public_key_pem(include_str!("blizzard_certificate_bundle.pub"))
                     .unwrap();
-            let public_key_n = public_key.n().to_bytes_le();
+            let mut public_key_n_and_e = public_key.n().to_bytes_le();
+            public_key_n_and_e.append(&mut public_key.e().to_bytes_le());
 
             let mut file_content = std::fs::read(&file).unwrap();
             if let (
@@ -155,45 +158,39 @@ async fn main() {
                 Some(certificate_bundle_index),
                 Some(certificate_bundle_signature_index),
             ) = (
-                kmp::kmp_find(&public_key_n, &file_content),
+                kmp::kmp_find(&public_key_n_and_e, &file_content),
                 kmp::kmp_find(b"{\"Created\":", &file_content),
                 kmp::kmp_find(b"}NGIS", &file_content),
             ) {
                 // create new certificate bundle
                 let certificate_bundle_signature_index = certificate_bundle_signature_index + 1;
+                let certs = uris
+                    .into_iter()
+                    .map(|uri| CertificateBundlePublicKey {
+                        uri: uri.clone(),
+                        sha256: sha256(
+                            &X509::from_pem(&std::fs::read(format!("certs/{uri}.crt")).unwrap())
+                                .unwrap()
+                                .public_key()
+                                .unwrap()
+                                .rsa()
+                                .unwrap()
+                                .public_key_to_der_pkcs1()
+                                .unwrap(),
+                        ),
+                    })
+                    .collect::<Vec<_>>();
                 let ca_cert_pem = std::fs::read_to_string("certs/root.crt").unwrap();
                 let ca_cert = X509::from_pem(ca_cert_pem.as_bytes()).unwrap();
-                let cert =
-                    X509::from_pem(&std::fs::read("certs/eu.actual.battle.net.crt").unwrap())
-                        .unwrap();
                 let certificate_bundle = format!(
                     "{:1$}",
                     serde_json::to_string(&CertificateBundle {
-                        created: 1612222344,
-                        certificates: vec![CertificateBundlePublicKey {
-                            uri: "eu.actual.battle.net".to_string(),
-                            sha256: sha256(
-                                &cert
-                                    .public_key()
-                                    .unwrap()
-                                    .rsa()
-                                    .unwrap()
-                                    .public_key_to_der_pkcs1()
-                                    .unwrap()
-                            ),
-                        }],
-                        public_keys: vec![CertificateBundlePublicKey {
-                            uri: "eu.actual.battle.net".to_string(),
-                            sha256: sha256(
-                                &cert
-                                    .public_key()
-                                    .unwrap()
-                                    .rsa()
-                                    .unwrap()
-                                    .public_key_to_der_pkcs1()
-                                    .unwrap()
-                            ),
-                        }],
+                        created: SystemTime::now()
+                            .duration_since(SystemTime::UNIX_EPOCH)
+                            .unwrap()
+                            .as_millis() as u64,
+                        certificates: certs.clone(),
+                        public_keys: certs,
                         signing_certificates: vec![CertificateBundleCertificate {
                             data: ca_cert_pem.replace('\n', ""),
                         }],
@@ -262,7 +259,7 @@ struct CertificateBundle {
     root_ca_public_keys: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct CertificateBundlePublicKey {
     #[serde(rename = "Uri")]
     uri: String,

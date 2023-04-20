@@ -1,4 +1,8 @@
 use std::{path::PathBuf, sync::Arc, time::SystemTime};
+use std::collections::HashMap;
+use byteorder::BigEndian;
+use byteorder::ReadBytesExt;
+use prost::Message;
 
 use clap::{arg, Parser};
 use futures_util::{SinkExt, StreamExt};
@@ -13,6 +17,8 @@ use rsa::{
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use tokio::net::TcpListener;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::unbounded_channel;
 use tokio_rustls::{rustls::ServerConfig, TlsAcceptor};
 use tokio_tungstenite::{
     tungstenite::{client::IntoClientRequest, handshake::server},
@@ -125,15 +131,52 @@ async fn main() {
                         println!("{}: {}", header_name, header_value.to_str().unwrap());
                     }
 
+                    let (client_req_tx, mut client_req_rx) = unbounded_channel();
+                    let (server_req_tx, mut server_req_rx) = unbounded_channel();
+                    let client_service = bgs::RemoteService::new(client_req_tx);
+                    let server_service = bgs::RemoteService::new(server_req_tx);
+
                     loop {
                         tokio::select! {
-                            message = stream.next() => {
-                                let message = message.unwrap().unwrap();
-                                remote_stream.send(message).await.unwrap();
+                            request = client_req_rx.recv() => {
+                                let request = request.unwrap();
+                                remote_stream.send(tokio_tungstenite::tungstenite::Message::Binary(request)).await.unwrap();
                             }
                             message = remote_stream.next() => {
-                                let message = message.unwrap().unwrap();
-                                stream.send(message).await.unwrap();
+                                let message = message.unwrap().unwrap().into_data();
+                                let mut message = message.as_slice();
+                                let header_size = message.read_u16::<BigEndian>().unwrap();
+                                let (header, message) = message.split_at(header_size as usize);
+                                let header = bgs::protocol::Header::decode(header).unwrap();
+                                match header.service_id {
+                                    0 => {
+                                        server_service.request(header, message.to_vec());
+                                    }
+                                    254 => {
+                                        client_service.respond(header, message.to_vec());
+                                    }
+                                    _ => todo!()
+                                }
+                            }
+                            request = server_req_rx.recv() => {
+                                let request = request.unwrap();
+                                stream.send(tokio_tungstenite::tungstenite::Message::Binary(request)).await.unwrap();
+                            }
+                            message = stream.next() => {
+                                let message = message.unwrap().unwrap().into_data();
+                                let mut message = message.as_slice();
+                                let header_size = message.read_u16::<BigEndian>().unwrap();
+                                let (header, message) = message.split_at(header_size as usize);
+                                let header = bgs::protocol::Header::decode(header).unwrap();
+                                match header.service_id {
+                                    0 => {
+
+                                    }
+                                    254 => {
+                                        server_service.respond(header, message.to_vec());
+                                    }
+                                    _ => todo!()
+                                }
                             }
                         }
                     }

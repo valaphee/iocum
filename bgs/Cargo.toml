@@ -5,6 +5,7 @@ edition = "2021"
 repository = "https://github.com/valaphee/stax.git"
 
 [dependencies]
+async-trait = "0.1.68"
 byteorder = "1.4.3"
 clap = { version = "4.2.2", features = ["derive"] }
 futures-util = "0.3.28"

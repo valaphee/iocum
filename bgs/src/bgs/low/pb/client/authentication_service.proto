@@ -83,27 +83,27 @@ service AuthenticationListener {
   option (service_options).descriptor_name = "bnet.protocol.authentication.AuthenticationClient";
   option (service_options).type = SERVICE_TYPE_RPC_DIRECT;
   option (sdk_service_options).inbound = true;
-  
+
   rpc OnServerStateChange (.bgs.protocol.authentication.v1.ServerStateChangeRequest) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 4;
   }
-  
+
   rpc OnLogonComplete (.bgs.protocol.authentication.v1.LogonResult) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 5;
   }
-  
+
   rpc OnLogonUpdate (.bgs.protocol.authentication.v1.LogonUpdateRequest) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 10;
   }
-  
+
   rpc OnVersionInfoUpdated (.bgs.protocol.authentication.v1.VersionInfoNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 11;
   }
-  
+
   rpc OnLogonQueueUpdate (.bgs.protocol.authentication.v1.LogonQueueUpdateRequest) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 12;
   }
-  
+
   rpc OnLogonQueueEnd (.bgs.protocol.NoData) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 13;
   }
@@ -113,15 +113,15 @@ service AuthenticationService {
   option (service_options).descriptor_name = "bnet.protocol.authentication.AuthenticationServer";
   option (service_options).shard_name = "authentication";
   option (sdk_service_options).outbound = true;
-  
+
   rpc Logon (.bgs.protocol.authentication.v1.LogonRequest) returns (.bgs.protocol.NoData) {
     option (method_options).id = 1;
   }
-  
+
   rpc VerifyWebCredentials (.bgs.protocol.authentication.v1.VerifyWebCredentialsRequest) returns (.bgs.protocol.NoData) {
     option (method_options).id = 7;
   }
-  
+
   rpc GenerateWebCredentials (.bgs.protocol.authentication.v1.GenerateWebCredentialsRequest) returns (.bgs.protocol.authentication.v1.GenerateWebCredentialsResponse) {
     option (method_options).id = 8;
   }

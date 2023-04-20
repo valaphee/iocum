@@ -23,7 +23,7 @@ message BGSServiceOptions {
     SERVICE_TYPE_EVENT = 2;
     SERVICE_TYPE_EVENT_BROADCAST = 3;
   }
-  
+
   optional string descriptor_name = 1;
   optional uint32 version = 4;
   optional string shard_name = 5;

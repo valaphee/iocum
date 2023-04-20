@@ -27,7 +27,7 @@ message AttributeFilter {
     MATCH_ALL = 2;
     MATCH_ALL_MOST_SPECIFIC = 3;
   }
-  
+
   optional .bgs.protocol.v2.AttributeFilter.Operation op = 1;
   repeated .bgs.protocol.v2.Attribute attribute = 2;
 }

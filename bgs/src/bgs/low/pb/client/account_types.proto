@@ -23,7 +23,7 @@ enum IdentityVerificationStatus {
 
 message AccountId {
   option (message_options).custom_select_shard = true;
-  
+
   required fixed32 id = 1;
 }
 
@@ -34,7 +34,7 @@ message AccountLicense {
 
 message GameAccountHandle {
   option (message_options).custom_select_shard = true;
-  
+
   required fixed32 id = 1;
   required fixed32 program = 2;
   required uint32 region = 3;
@@ -42,7 +42,7 @@ message GameAccountHandle {
 
 message AccountReference {
   option (message_options).custom_select_shard = true;
-  
+
   optional fixed32 id = 1;
   optional string email = 2 [(field_options).log = HIDDEN];
   optional .bgs.protocol.account.v1.GameAccountHandle handle = 3;
@@ -53,7 +53,7 @@ message AccountReference {
 
 message Identity {
   option (message_options).custom_validator = true;
-  
+
   optional .bgs.protocol.account.v1.AccountId account = 1;
   optional .bgs.protocol.account.v1.GameAccountHandle game_account = 2;
 }
@@ -146,7 +146,7 @@ message PrivacyInfo {
     PRIVACY_FRIENDS = 1;
     PRIVACY_EVERYONE = 2;
   }
-  
+
   optional bool is_using_rid = 3;
   optional bool is_visible_for_view_friends = 4;
   optional bool is_hidden_from_friend_finder = 5;

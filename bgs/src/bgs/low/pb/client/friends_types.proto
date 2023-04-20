@@ -40,7 +40,7 @@ message ReceivedInvitation {
   optional string invitee_name = 5;
   optional uint64 creation_time = 7;
   optional fixed32 program = 9;
-  
+
   extensions 100 to 10000;
 }
 
@@ -48,7 +48,7 @@ message FriendInvitation {
   extend .bgs.protocol.friends.v1.ReceivedInvitation {
     optional .bgs.protocol.friends.v1.FriendInvitation friend_invitation = 103;
   }
-  
+
   repeated uint32 role = 2 [packed = true];
   repeated .bgs.protocol.Attribute attribute = 3;
 }
@@ -66,7 +66,7 @@ message FriendInvitationParams {
   extend .bgs.protocol.InvitationParams {
     optional .bgs.protocol.friends.v1.FriendInvitationParams friend_params = 103;
   }
-  
+
   optional string target_email = 1 [(field_options).log = HIDDEN];
   optional string target_battle_tag = 2 [(field_options).log = HIDDEN];
   repeated uint32 role = 6 [packed = true];

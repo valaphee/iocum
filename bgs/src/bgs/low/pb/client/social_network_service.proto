@@ -28,7 +28,7 @@ message GetFacebookBnetFriendsRequest {
     LARGE = 2;
     SQUARE = 3;
   }
-  
+
   optional .bgs.protocol.sns.v1.GetFacebookBnetFriendsRequest.ProfilePictureType profile_picture_type = 2 [default = SMALL];
   optional uint32 token = 3;
 }
@@ -95,35 +95,35 @@ service SocialNetworkService {
   option (service_options).shard_name = "social_network";
   option (service_options).version = 1;
   option (sdk_service_options).outbound = true;
-  
+
   rpc GetFacebookAuthCode (.bgs.protocol.sns.v1.GetFacebookAuthCodeRequest) returns (.bgs.protocol.sns.v1.GetFacebookAuthCodeResponse) {
     option (method_options).id = 1;
     option (method_options).client_identity_routing = CLIENT_IDENTITY_ROUTING_BATTLE_NET_ACCOUNT;
   }
-  
+
   rpc GetFacebookBnetFriends (.bgs.protocol.sns.v1.GetFacebookBnetFriendsRequest) returns (.bgs.protocol.NoData) {
     option (method_options).id = 2;
     option (method_options).client_identity_routing = CLIENT_IDENTITY_ROUTING_BATTLE_NET_ACCOUNT;
   }
-  
+
   rpc GetFacebookSettings (.bgs.protocol.NoData) returns (.bgs.protocol.sns.v1.GetFacebookSettingsResponse) {
     option (method_options).id = 3;
   }
-  
+
   rpc GetFacebookAccountLinkStatus (.bgs.protocol.sns.v1.GetFacebookAccountLinkStatusRequest) returns (.bgs.protocol.sns.v1.GetFacebookAccountLinkStatusResponse) {
     option (method_options).id = 4;
     option (method_options).client_identity_routing = CLIENT_IDENTITY_ROUTING_BATTLE_NET_ACCOUNT;
   }
-  
+
   rpc GetGoogleAuthToken (.bgs.protocol.sns.v1.GetGoogleAuthTokenRequest) returns (.bgs.protocol.sns.v1.GetGoogleAuthTokenResponse) {
     option (method_options).id = 5;
     option (method_options).client_identity_routing = CLIENT_IDENTITY_ROUTING_BATTLE_NET_ACCOUNT;
   }
-  
+
   rpc GetGoogleSettings (.bgs.protocol.NoData) returns (.bgs.protocol.sns.v1.GetGoogleSettingsResponse) {
     option (method_options).id = 6;
   }
-  
+
   rpc GetGoogleAccountLinkStatus (.bgs.protocol.sns.v1.GetGoogleAccountLinkStatusRequest) returns (.bgs.protocol.sns.v1.GetGoogleAccountLinkStatusResponse) {
     option (method_options).id = 7;
     option (method_options).client_identity_routing = CLIENT_IDENTITY_ROUTING_BATTLE_NET_ACCOUNT;
@@ -134,7 +134,7 @@ service SocialNetworkListener {
   option (service_options).descriptor_name = "bnet.protocol.sns.SocialNetworkListener";
   option (service_options).type = SERVICE_TYPE_RPC_DIRECT;
   option (sdk_service_options).inbound = true;
-  
+
   rpc OnFacebookBnetFriendListReceived (.bgs.protocol.sns.v1.FacebookBnetFriendListNotification) returns (.bgs.protocol.sns.v1.FacebookBnetFriendListNotificationResponse) {
     option (method_options).id = 1;
   }

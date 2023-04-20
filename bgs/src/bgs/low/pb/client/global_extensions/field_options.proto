@@ -81,7 +81,7 @@ message EntityIdRestriction {
     SERVICE = 4;
     CHANNEL = 5;
   }
-  
+
   optional bool needed = 1;
   optional .bgs.protocol.EntityIdRestriction.Kind kind = 2;
 }

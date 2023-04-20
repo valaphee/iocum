@@ -13,7 +13,7 @@ option java_multiple_files = true;
 
 message Target {
   option (message_options).custom_validator = true;
-  
+
   optional .bgs.protocol.notification.v1.TargetIdentity identity = 1;
   optional string type = 2;
 }
@@ -31,7 +31,7 @@ message Subscription {
 
 message Notification {
   option (message_options).custom_select_shard = true;
-  
+
   optional .bgs.protocol.EntityId sender_id = 1;
   required .bgs.protocol.EntityId target_id = 2;
   required string type = 3;

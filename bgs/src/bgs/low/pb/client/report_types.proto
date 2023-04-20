@@ -37,7 +37,7 @@ message SpamReport {
     WHISPER = 3;
     CHAT = 4;
   }
-  
+
   optional .bgs.protocol.account.v1.GameAccountHandle target = 1;
   optional .bgs.protocol.report.v1.SpamReport.SpamSource source = 2 [default = OTHER];
 }

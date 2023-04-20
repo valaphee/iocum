@@ -33,7 +33,7 @@ message FieldOperation {
     SET = 0;
     CLEAR = 1;
   }
-  
+
   required .bgs.protocol.presence.v1.Field field = 1;
   optional .bgs.protocol.presence.v1.FieldOperation.OperationType operation = 2 [default = SET];
 }
@@ -47,7 +47,7 @@ message ChannelState {
   extend .bgs.protocol.channel.v1.ChannelState {
     optional .bgs.protocol.presence.v1.ChannelState presence = 101;
   }
-  
+
   optional .bgs.protocol.EntityId entity_id = 1;
   repeated .bgs.protocol.presence.v1.FieldOperation field_operation = 2;
   optional bool healing = 3;

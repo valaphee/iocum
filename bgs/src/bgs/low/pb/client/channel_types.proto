@@ -15,7 +15,7 @@ option java_multiple_files = true;
 
 message Message {
   repeated .bgs.protocol.Attribute attribute = 1;
-  
+
   extensions 100 to 10000;
 }
 
@@ -48,7 +48,7 @@ message ChannelState {
     PRIVACY_LEVEL_OPEN_INVITATION = 3;
     PRIVACY_LEVEL_CLOSED = 4;
   }
-  
+
   optional uint32 max_members = 1;
   optional uint32 min_members = 2;
   repeated .bgs.protocol.Attribute attribute = 3;
@@ -59,7 +59,7 @@ message ChannelState {
   optional string channel_type = 10 [default = "default"];
   optional fixed32 program = 11;
   optional bool subscribe_to_presence = 13 [default = true];
-  
+
   extensions 100 to 10000;
 }
 
@@ -81,7 +81,7 @@ message Member {
 
 message SubscriberId {
   option (message_options).custom_validator = true;
-  
+
   optional .bgs.protocol.account.v1.AccountId account = 1 [deprecated = true];
   optional .bgs.protocol.account.v1.GameAccountHandle game_account = 2;
   optional .bgs.protocol.ProcessId process = 3;

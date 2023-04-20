@@ -59,42 +59,42 @@ service ClubMembershipListener {
   option (service_options).type = SERVICE_TYPE_RPC_DIRECT;
   option (sdk_service_options).inbound = true;
   option (sdk_service_options).use_client_id = true;
-  
+
   rpc OnClubAdded (.bgs.protocol.club.v1.membership.ClubAddedNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).enable_fanout = true;
     option (method_options).id = 1;
   }
-  
+
   rpc OnClubRemoved (.bgs.protocol.club.v1.membership.ClubRemovedNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).enable_fanout = true;
     option (method_options).id = 2;
   }
-  
+
   rpc OnReceivedInvitationAdded (.bgs.protocol.club.v1.membership.ReceivedInvitationAddedNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).enable_fanout = true;
     option (method_options).id = 3;
   }
-  
+
   rpc OnReceivedInvitationRemoved (.bgs.protocol.club.v1.membership.ReceivedInvitationRemovedNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).enable_fanout = true;
     option (method_options).id = 4;
   }
-  
+
   rpc OnSharedSettingsChanged (.bgs.protocol.club.v1.membership.SharedSettingsChangedNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).enable_fanout = true;
     option (method_options).id = 5;
   }
-  
+
   rpc OnStreamMentionAdded (.bgs.protocol.club.v1.membership.StreamMentionAddedNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).enable_fanout = true;
     option (method_options).id = 6;
   }
-  
+
   rpc OnStreamMentionRemoved (.bgs.protocol.club.v1.membership.StreamMentionRemovedNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).enable_fanout = true;
     option (method_options).id = 7;
   }
-  
+
   rpc OnStreamMentionAdvanceViewTime (.bgs.protocol.club.v1.membership.StreamMentionAdvanceViewTimeNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).enable_fanout = true;
     option (method_options).id = 8;

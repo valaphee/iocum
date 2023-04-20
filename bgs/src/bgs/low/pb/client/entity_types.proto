@@ -14,7 +14,7 @@ option java_outer_classname = "EntityProto";
 
 message EntityId {
   option (message_options).custom_select_shard = true;
-  
+
   required fixed64 high = 1 [(field_options).log = HEX];
   required fixed64 low = 2 [(field_options).log = HEX];
 }

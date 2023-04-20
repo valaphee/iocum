@@ -50,28 +50,28 @@ service WhisperListener {
   option (service_options).descriptor_name = "bnet.protocol.whisper.WhisperListener";
   option (service_options).type = SERVICE_TYPE_RPC_DIRECT;
   option (sdk_service_options).inbound = true;
-  
+
   rpc OnWhisper (.bgs.protocol.whisper.v1.WhisperNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 1;
     option (method_options).handle_destination_unreachable = true;
   }
-  
+
   rpc OnWhisperEcho (.bgs.protocol.whisper.v1.WhisperEchoNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 2;
   }
-  
+
   rpc OnTypingIndicatorUpdate (.bgs.protocol.whisper.v1.TypingIndicatorNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 3;
   }
-  
+
   rpc OnAdvanceViewTime (.bgs.protocol.whisper.v1.AdvanceViewTimeNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 4;
   }
-  
+
   rpc OnWhisperUpdated (.bgs.protocol.whisper.v1.WhisperUpdatedNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 5;
   }
-  
+
   rpc OnAdvanceClearTime (.bgs.protocol.whisper.v1.AdvanceClearTimeNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 6;
   }

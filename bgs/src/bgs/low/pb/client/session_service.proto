@@ -15,7 +15,7 @@ option cc_generic_services = false;
 
 message CreateSessionRequest {
   option (message_options).custom_select_shard = true;
-  
+
   optional .bgs.protocol.account.v1.Identity identity = 1;
   optional fixed32 platform = 2;
   optional fixed32 locale = 3;
@@ -34,7 +34,7 @@ message CreateSessionResponse {
 
 message UpdateSessionRequest {
   option (message_options).custom_select_shard = true;
-  
+
   optional .bgs.protocol.account.v1.Identity identity = 1;
   optional .bgs.protocol.session.v1.SessionOptions options = 2;
   optional string session_id = 3;
@@ -42,7 +42,7 @@ message UpdateSessionRequest {
 
 message DestroySessionRequest {
   option (message_options).custom_select_shard = true;
-  
+
   optional .bgs.protocol.account.v1.Identity identity = 1;
   optional string session_id = 2;
 }
@@ -124,19 +124,19 @@ service SessionListener {
   option (service_options).descriptor_name = "bnet.protocol.session.SessionListener";
   option (service_options).type = SERVICE_TYPE_RPC_DIRECT;
   option (sdk_service_options).inbound = true;
-  
+
   rpc OnSessionCreated (.bgs.protocol.session.v1.SessionCreatedNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 1;
   }
-  
+
   rpc OnSessionDestroyed (.bgs.protocol.session.v1.SessionDestroyedNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 2;
   }
-  
+
   rpc OnSessionUpdated (.bgs.protocol.session.v1.SessionUpdatedNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 3;
   }
-  
+
   rpc OnSessionGameTimeWarning (.bgs.protocol.session.v1.SessionGameTimeWarningNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 4;
   }
@@ -146,39 +146,39 @@ service SessionService {
   option (service_options).descriptor_name = "bnet.protocol.session.SessionService";
   option (service_options).shard_name = "session";
   option (sdk_service_options).outbound = true;
-  
+
   rpc CreateSession (.bgs.protocol.session.v1.CreateSessionRequest) returns (.bgs.protocol.session.v1.CreateSessionResponse) {
     option (method_options).id = 1;
   }
-  
+
   rpc DestroySession (.bgs.protocol.session.v1.DestroySessionRequest) returns (.bgs.protocol.NoData) {
     option (method_options).id = 2;
   }
-  
+
   rpc UpdateSession (.bgs.protocol.session.v1.UpdateSessionRequest) returns (.bgs.protocol.NoData) {
     option (method_options).id = 5;
   }
-  
+
   rpc GetSessionStateByBenefactor (.bgs.protocol.session.v1.GetSessionStateByBenefactorRequest) returns (.bgs.protocol.session.v1.GetSessionStateByBenefactorResponse) {
     option (method_options).id = 7;
     option (method_options).idempotent = true;
   }
-  
+
   rpc MarkSessionsAlive (.bgs.protocol.session.v1.MarkSessionsAliveRequest) returns (.bgs.protocol.session.v1.MarkSessionsAliveResponse) {
     option (method_options).id = 8;
   }
-  
+
   rpc GetSessionState (.bgs.protocol.session.v1.GetSessionStateRequest) returns (.bgs.protocol.session.v1.GetSessionStateResponse) {
     option (method_options).id = 9;
     option (method_options).idempotent = true;
     option (method_options).forward_key = "bgs.protocol.arcane.session.SessionIdForwardKey";
   }
-  
+
   rpc GetSignedSessionState (.bgs.protocol.session.v1.GetSignedSessionStateRequest) returns (.bgs.protocol.session.v1.GetSignedSessionStateResponse) {
     option (method_options).id = 10;
     option (method_options).forward_key = "bgs.protocol.arcane.session.SessionIdForwardKey";
   }
-  
+
   rpc RefreshSessionKey (.bgs.protocol.session.v1.RefreshSessionKeyRequest) returns (.bgs.protocol.session.v1.RefreshSessionKeyResponse) {
     option (method_options).id = 11;
   }

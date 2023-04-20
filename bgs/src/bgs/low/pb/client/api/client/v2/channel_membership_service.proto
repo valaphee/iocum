@@ -65,17 +65,17 @@ service ChannelMembershipService {
   option (service_options).resolve_client_instance = true;
   option (service_options).is_global = true;
   option (sdk_service_options).outbound = true;
-  
+
   rpc Subscribe (.bgs.protocol.channel.v2.membership.SubscribeRequest) returns (.bgs.protocol.channel.v2.membership.SubscribeResponse) {
     option (method_options).id = 1;
     option (method_options).client_identity_routing = CLIENT_IDENTITY_ROUTING_BATTLE_NET_ACCOUNT;
   }
-  
+
   rpc Unsubscribe (.bgs.protocol.channel.v2.membership.UnsubscribeRequest) returns (.bgs.protocol.NoData) {
     option (method_options).id = 2;
     option (method_options).client_identity_routing = CLIENT_IDENTITY_ROUTING_BATTLE_NET_ACCOUNT;
   }
-  
+
   rpc GetState (.bgs.protocol.channel.v2.membership.GetStateRequest) returns (.bgs.protocol.channel.v2.membership.GetStateResponse) {
     option (method_options).id = 3;
     option (method_options).client_identity_routing = CLIENT_IDENTITY_ROUTING_BATTLE_NET_ACCOUNT;
@@ -87,19 +87,19 @@ service ChannelMembershipListener {
   option (service_options).descriptor_name = "bnet.protocol.channel.v2.membership.ChannelMembershipListener";
   option (service_options).type = SERVICE_TYPE_RPC_DIRECT;
   option (sdk_service_options).inbound = true;
-  
+
   rpc OnChannelAdded (.bgs.protocol.channel.v2.membership.ChannelAddedNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 1;
   }
-  
+
   rpc OnChannelRemoved (.bgs.protocol.channel.v2.membership.ChannelRemovedNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 2;
   }
-  
+
   rpc OnReceivedInvitationAdded (.bgs.protocol.channel.v2.membership.ReceivedInvitationAddedNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 3;
   }
-  
+
   rpc OnReceivedInvitationRemoved (.bgs.protocol.channel.v2.membership.ReceivedInvitationRemovedNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 4;
   }

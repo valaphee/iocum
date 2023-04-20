@@ -96,33 +96,33 @@ service ConnectionService {
   option (service_options).shard_name = "connection";
   option (sdk_service_options).outbound = true;
   option (sdk_service_options).inbound = true;
-  
+
   rpc Connect (.bgs.protocol.connection.v1.ConnectRequest) returns (.bgs.protocol.connection.v1.ConnectResponse) {
     option (method_options).id = 1;
   }
-  
+
   rpc Bind (.bgs.protocol.connection.v1.BindRequest) returns (.bgs.protocol.connection.v1.BindResponse) {
     option (method_options).id = 2;
     option (method_options).obsolete = true;
   }
-  
+
   rpc Echo (.bgs.protocol.connection.v1.EchoRequest) returns (.bgs.protocol.connection.v1.EchoResponse) {
     option (method_options).id = 3;
   }
-  
+
   rpc ForceDisconnect (.bgs.protocol.connection.v1.DisconnectNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 4;
   }
-  
+
   rpc KeepAlive (.bgs.protocol.NoData) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 5;
   }
-  
+
   rpc Encrypt (.bgs.protocol.connection.v1.EncryptRequest) returns (.bgs.protocol.NoData) {
     option (method_options).id = 6;
     option (method_options).obsolete = true;
   }
-  
+
   rpc RequestDisconnect (.bgs.protocol.connection.v1.DisconnectRequest) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 7;
   }

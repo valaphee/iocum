@@ -39,11 +39,11 @@ service ChannelVoiceService {
   option (service_options).shard_name = "channel";
   option (service_options).is_global = false;
   option (sdk_service_options).outbound = true;
-  
+
   rpc GetLoginToken (.bgs.protocol.channel.v1.GetLoginTokenRequest) returns (.bgs.protocol.channel.v1.GetLoginTokenResponse) {
     option (method_options).id = 1;
   }
-  
+
   rpc GetJoinToken (.bgs.protocol.channel.v1.GetJoinTokenRequest) returns (.bgs.protocol.channel.v1.GetJoinTokenResponse) {
     option (method_options).id = 2;
   }

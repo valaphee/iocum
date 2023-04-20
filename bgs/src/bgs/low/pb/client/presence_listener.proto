@@ -25,12 +25,12 @@ service PresenceListener {
   option (service_options).descriptor_name = "bnet.protocol.presence.v1.PresenceListener";
   option (service_options).type = SERVICE_TYPE_RPC_DIRECT;
   option (sdk_service_options).inbound = true;
-  
+
   rpc OnSubscribe (.bgs.protocol.presence.v1.SubscribeNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 1;
     option (method_options).handle_destination_unreachable = true;
   }
-  
+
   rpc OnStateChanged (.bgs.protocol.presence.v1.StateChangedNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 2;
     option (method_options).handle_destination_unreachable = true;

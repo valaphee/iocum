@@ -43,15 +43,15 @@ service DiagService {
   option (service_options).descriptor_name = "bnet.protocol.diag.DiagService";
   option (service_options).shard_name = "diag";
   option (sdk_service_options).inbound = true;
-  
+
   rpc GetVar (.bgs.protocol.diag.v1.GetVarRequest) returns (.bgs.protocol.diag.v1.GetVarResponse) {
     option (method_options).id = 1;
   }
-  
+
   rpc SetVar (.bgs.protocol.diag.v1.SetVarRequest) returns (.bgs.protocol.NoData) {
     option (method_options).id = 2;
   }
-  
+
   rpc Query (.bgs.protocol.diag.v1.QueryRequest) returns (.bgs.protocol.diag.v1.QueryResponse) {
     option (method_options).id = 3;
   }

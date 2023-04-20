@@ -15,7 +15,7 @@ option cc_generic_services = false;
 
 message SubmitReportRequest {
   option (message_options).custom_select_shard = true;
-  
+
   optional .bgs.protocol.account.v1.AccountId agent_id = 1;
   optional string user_description = 2;
   optional .bgs.protocol.report.v2.UserOptions user_options = 10;
@@ -28,7 +28,7 @@ service ReportService {
   option (service_options).shard_name = "report";
   option (service_options).is_global = true;
   option (sdk_service_options).outbound = true;
-  
+
   rpc SubmitReport (.bgs.protocol.report.v2.SubmitReportRequest) returns (.bgs.protocol.NoData) {
     option (method_options).id = 1;
     option (method_options).custom_region_resolver = "ResolveSubmitReportRegion";

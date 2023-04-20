@@ -1,13 +1,11 @@
-use std::{path::PathBuf, sync::Arc, time::SystemTime};
-use std::collections::HashMap;
-use byteorder::BigEndian;
-use byteorder::ReadBytesExt;
-use prost::Message;
+use std::{io::Write, path::PathBuf, sync::Arc, time::SystemTime};
 
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use clap::{arg, Parser};
 use futures_util::{SinkExt, StreamExt};
 use native_tls::TlsConnector;
 use openssl::{sha::sha256, x509::X509};
+use prost::Message;
 use rsa::{
     pkcs1v15::SigningKey,
     pkcs8::DecodePublicKey,
@@ -16,9 +14,7 @@ use rsa::{
 };
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
-use tokio::net::TcpListener;
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::unbounded_channel;
+use tokio::{net::TcpListener, sync::mpsc::unbounded_channel};
 use tokio_rustls::{rustls::ServerConfig, TlsAcceptor};
 use tokio_tungstenite::{
     tungstenite::{client::IntoClientRequest, handshake::server},
@@ -131,55 +127,167 @@ async fn main() {
                         println!("{}: {}", header_name, header_value.to_str().unwrap());
                     }
 
-                    let (client_req_tx, mut client_req_rx) = unbounded_channel();
-                    let (server_req_tx, mut server_req_rx) = unbounded_channel();
-                    let client_service = bgs::RemoteService::new(client_req_tx);
-                    let server_service = bgs::RemoteService::new(server_req_tx);
+                    let (client_message_tx, mut client_message_rx) = unbounded_channel();
+                    let client_service =
+                        Arc::new(bgs::RemoteService::new(client_message_tx.clone()));
 
-                    loop {
-                        tokio::select! {
-                            request = client_req_rx.recv() => {
-                                let request = request.unwrap();
-                                remote_stream.send(tokio_tungstenite::tungstenite::Message::Binary(request)).await.unwrap();
-                            }
-                            message = remote_stream.next() => {
-                                let message = message.unwrap().unwrap().into_data();
-                                let mut message = message.as_slice();
-                                let header_size = message.read_u16::<BigEndian>().unwrap();
-                                let (header, message) = message.split_at(header_size as usize);
-                                let header = bgs::protocol::Header::decode(header).unwrap();
-                                match header.service_id {
-                                    0 => {
-                                        server_service.request(header, message.to_vec());
-                                    }
-                                    254 => {
-                                        client_service.respond(header, message.to_vec());
-                                    }
-                                    _ => todo!()
-                                }
-                            }
-                            request = server_req_rx.recv() => {
-                                let request = request.unwrap();
-                                stream.send(tokio_tungstenite::tungstenite::Message::Binary(request)).await.unwrap();
-                            }
-                            message = stream.next() => {
-                                let message = message.unwrap().unwrap().into_data();
-                                let mut message = message.as_slice();
-                                let header_size = message.read_u16::<BigEndian>().unwrap();
-                                let (header, message) = message.split_at(header_size as usize);
-                                let header = bgs::protocol::Header::decode(header).unwrap();
-                                match header.service_id {
-                                    0 => {
+                    let (server_message_tx, mut server_message_rx) = unbounded_channel();
+                    let server_service =
+                        Arc::new(bgs::RemoteService::new(server_message_tx.clone()));
 
-                                    }
-                                    254 => {
-                                        server_service.respond(header, message.to_vec());
-                                    }
-                                    _ => todo!()
+                    let client_service_2 = client_service.clone();
+                    let (server_request_tx, mut server_request_rx) =
+                        unbounded_channel::<(bgs::protocol::Header, Vec<u8>)>();
+                    tokio::spawn(async move {
+                        loop {
+                            while let Some(request) = server_request_rx.recv().await {
+                                if let Some(response) = client_service_2
+                                    .handle_request(
+                                        request.0.service_hash.unwrap(),
+                                        request.0.method_id.unwrap(),
+                                        &request.1,
+                                    )
+                                    .await
+                                {
+                                    let header = bgs::protocol::Header {
+                                        service_id: 254,
+                                        method_id: None,
+                                        token: request.0.token,
+                                        object_id: None,
+                                        size: Some(response.len() as u32),
+                                        status: Some(0),
+                                        error: vec![],
+                                        timeout: None,
+                                        is_response: None,
+                                        forward_targets: vec![],
+                                        service_hash: None,
+                                        client_id: None,
+                                        fanout_target: vec![],
+                                        client_id_fanout_target: vec![],
+                                        client_record: None,
+                                        original_sender: None,
+                                        sender_token: None,
+                                        router_label: None,
+                                        error_reason: None,
+                                    };
+
+                                    let mut packet_vec =
+                                        vec![0; 2 + header.encoded_len() + response.len()];
+                                    let mut packet = packet_vec.as_mut_slice();
+                                    packet
+                                        .write_u16::<BigEndian>(header.encoded_len() as u16)
+                                        .unwrap();
+                                    header.encode(&mut packet).unwrap();
+                                    packet.write(&response).unwrap();
+                                    server_message_tx.send(packet_vec).unwrap();
                                 }
                             }
                         }
-                    }
+                    });
+
+                    let server_service_2 = server_service.clone();
+                    let (client_request_tx, mut client_request_rx) =
+                        unbounded_channel::<(bgs::protocol::Header, Vec<u8>)>();
+                    tokio::spawn(async move {
+                        loop {
+                            while let Some(request) = client_request_rx.recv().await {
+                                if let Some(response) = server_service_2
+                                    .handle_request(
+                                        request.0.service_hash.unwrap(),
+                                        request.0.method_id.unwrap(),
+                                        &request.1,
+                                    )
+                                    .await
+                                {
+                                    let header = bgs::protocol::Header {
+                                        service_id: 254,
+                                        method_id: None,
+                                        token: request.0.token,
+                                        object_id: None,
+                                        size: Some(response.len() as u32),
+                                        status: Some(0),
+                                        error: vec![],
+                                        timeout: None,
+                                        is_response: None,
+                                        forward_targets: vec![],
+                                        service_hash: None,
+                                        client_id: None,
+                                        fanout_target: vec![],
+                                        client_id_fanout_target: vec![],
+                                        client_record: None,
+                                        original_sender: None,
+                                        sender_token: None,
+                                        router_label: None,
+                                        error_reason: None,
+                                    };
+
+                                    let mut packet_vec =
+                                        vec![0; 2 + header.encoded_len() + response.len()];
+                                    let mut packet = packet_vec.as_mut_slice();
+                                    packet
+                                        .write_u16::<BigEndian>(header.encoded_len() as u16)
+                                        .unwrap();
+                                    header.encode(&mut packet).unwrap();
+                                    packet.write(&response).unwrap();
+                                    client_message_tx.send(packet_vec).unwrap();
+                                }
+                            }
+                        }
+                    });
+
+                    tokio::spawn(async move {
+                        loop {
+                            tokio::select! {
+                                message = stream.next() => {
+                                    if let tokio_tungstenite::tungstenite::Message::Binary(message) = message.unwrap().unwrap() {
+                                        let mut message = message.as_slice();
+                                        let header_size = message.read_u16::<BigEndian>().unwrap();
+                                        let (header, message) = message.split_at(header_size as usize);
+                                        let header = bgs::protocol::Header::decode(header).unwrap();
+                                        match header.service_id {
+                                            0 => {
+                                                client_request_tx.send((header, message.to_vec())).unwrap();
+                                            }
+                                            254 => {
+                                                client_service.handle_response(header.token, message.to_vec());
+                                            }
+                                            _ => todo!()
+                                        }
+                                    }
+                                }
+                                message = client_message_rx.recv() => {
+                                    stream.send(tokio_tungstenite::tungstenite::Message::Binary(message.unwrap())).await.unwrap();
+                                }
+                            }
+                        }
+                    });
+
+                    tokio::spawn(async move {
+                        loop {
+                            tokio::select! {
+                                message = remote_stream.next() => {
+                                    if let tokio_tungstenite::tungstenite::Message::Binary(message) = message.unwrap().unwrap() {
+                                        let mut message = message.as_slice();
+                                        let header_size = message.read_u16::<BigEndian>().unwrap();
+                                        let (header, message) = message.split_at(header_size as usize);
+                                        let header = bgs::protocol::Header::decode(header).unwrap();
+                                        match header.service_id {
+                                            0 => {
+                                                server_request_tx.send((header, message.to_vec())).unwrap();
+                                            }
+                                            254 => {
+                                                server_service.handle_response(header.token, message.to_vec());
+                                            }
+                                            _ => todo!()
+                                        }
+                                    }
+                                }
+                                message = server_message_rx.recv() => {
+                                    remote_stream.send(tokio_tungstenite::tungstenite::Message::Binary(message.unwrap())).await.unwrap();
+                                }
+                            }
+                        }
+                    });
                 });
             }
         }

@@ -13,7 +13,7 @@ option java_generic_services = true;
 
 message CreateLoginCredentialsRequest {
   option (message_options).custom_select_shard = true;
-  
+
   optional .bgs.protocol.account.v1.AccountId agent_account_id = 1;
   optional uint32 version = 2 [(field_options).realized_enum = "VoiceProviderVersion"];
 }
@@ -24,7 +24,7 @@ message CreateLoginCredentialsResponse {
 
 message CreateChannelSttTokenRequest {
   option (message_options).custom_select_shard = true;
-  
+
   optional .bgs.protocol.account.v1.AccountId agent_account_id = 1;
   optional string channel_uri = 2;
   optional uint32 version = 3 [(field_options).realized_enum = "VoiceProviderVersion"];
@@ -38,11 +38,11 @@ service VoiceService {
   option (service_options).descriptor_name = "bnet.protocol.voice.v2.client.VoiceService";
   option (service_options).shard_name = "voice";
   option (sdk_service_options).outbound = true;
-  
+
   rpc CreateLoginCredentials (.bgs.protocol.voice.v2.client.CreateLoginCredentialsRequest) returns (.bgs.protocol.voice.v2.client.CreateLoginCredentialsResponse) {
     option (method_options).id = 1;
   }
-  
+
   rpc CreateChannelSttToken (.bgs.protocol.voice.v2.client.CreateChannelSttTokenRequest) returns (.bgs.protocol.voice.v2.client.CreateChannelSttTokenResponse) {
     option (method_options).id = 2;
   }

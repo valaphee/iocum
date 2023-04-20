@@ -72,32 +72,32 @@ service PresenceService {
   option (service_options).shard_name = "presence_aggregator";
   option (service_options).resolve_client_instance = true;
   option (sdk_service_options).outbound = true;
-  
+
   rpc Subscribe (.bgs.protocol.presence.v1.SubscribeRequest) returns (.bgs.protocol.NoData) {
     option (method_options).id = 1;
     option (method_options).client_identity_routing = CLIENT_IDENTITY_ROUTING_INSTANCE_ID;
   }
-  
+
   rpc Unsubscribe (.bgs.protocol.presence.v1.UnsubscribeRequest) returns (.bgs.protocol.NoData) {
     option (method_options).id = 2;
     option (method_options).client_identity_routing = CLIENT_IDENTITY_ROUTING_INSTANCE_ID;
   }
-  
+
   rpc Update (.bgs.protocol.presence.v1.UpdateRequest) returns (.bgs.protocol.NoData) {
     option (method_options).id = 3;
     option (method_options).client_identity_routing = CLIENT_IDENTITY_ROUTING_INSTANCE_ID;
   }
-  
+
   rpc Query (.bgs.protocol.presence.v1.QueryRequest) returns (.bgs.protocol.presence.v1.QueryResponse) {
     option (method_options).id = 4;
     option (method_options).client_identity_routing = CLIENT_IDENTITY_ROUTING_INSTANCE_ID;
   }
-  
+
   rpc BatchSubscribe (.bgs.protocol.presence.v1.BatchSubscribeRequest) returns (.bgs.protocol.presence.v1.BatchSubscribeResponse) {
     option (method_options).id = 8;
     option (method_options).client_identity_routing = CLIENT_IDENTITY_ROUTING_INSTANCE_ID;
   }
-  
+
   rpc BatchUnsubscribe (.bgs.protocol.presence.v1.BatchUnsubscribeRequest) returns (.bgs.protocol.NoData) {
     option (method_options).id = 9;
     option (method_options).client_identity_routing = CLIENT_IDENTITY_ROUTING_INSTANCE_ID;

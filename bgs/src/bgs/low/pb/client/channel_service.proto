@@ -108,31 +108,31 @@ service ChannelService {
   option (service_options).resolve_client_instance = true;
   option (service_options).is_global = false;
   option (sdk_service_options).outbound = true;
-  
+
   rpc RemoveMember (.bgs.protocol.channel.v1.RemoveMemberRequest) returns (.bgs.protocol.NoData) {
     option (method_options).id = 2;
     option (method_options).client_identity_routing = CLIENT_IDENTITY_ROUTING_INSTANCE_ID;
     option (method_options).forward_key = "bgs.protocol.arcane.channel.ChannelIdForwardKey";
   }
-  
+
   rpc SendMessage (.bgs.protocol.channel.v1.SendMessageRequest) returns (.bgs.protocol.NoData) {
     option (method_options).id = 3;
     option (method_options).client_identity_routing = CLIENT_IDENTITY_ROUTING_INSTANCE_ID;
     option (method_options).forward_key = "bgs.protocol.arcane.channel.ChannelIdForwardKey";
   }
-  
+
   rpc UpdateChannelState (.bgs.protocol.channel.v1.UpdateChannelStateRequest) returns (.bgs.protocol.NoData) {
     option (method_options).id = 4;
     option (method_options).client_identity_routing = CLIENT_IDENTITY_ROUTING_INSTANCE_ID;
     option (method_options).forward_key = "bgs.protocol.arcane.channel.ChannelIdForwardKey";
   }
-  
+
   rpc UpdateMemberState (.bgs.protocol.channel.v1.UpdateMemberStateRequest) returns (.bgs.protocol.NoData) {
     option (method_options).id = 5;
     option (method_options).client_identity_routing = CLIENT_IDENTITY_ROUTING_INSTANCE_ID;
     option (method_options).forward_key = "bgs.protocol.arcane.channel.ChannelIdForwardKey";
   }
-  
+
   rpc Dissolve (.bgs.protocol.channel.v1.DissolveRequest) returns (.bgs.protocol.NoData) {
     option (method_options).id = 6;
     option (method_options).client_identity_routing = CLIENT_IDENTITY_ROUTING_INSTANCE_ID;
@@ -144,37 +144,37 @@ service ChannelListener {
   option (service_options).descriptor_name = "bnet.protocol.channel.ChannelSubscriber";
   option (service_options).type = SERVICE_TYPE_RPC_DIRECT;
   option (sdk_service_options).inbound = true;
-  
+
   rpc OnJoin (.bgs.protocol.channel.v1.JoinNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 1;
     option (method_options).handle_destination_unreachable = true;
   }
-  
+
   rpc OnMemberAdded (.bgs.protocol.channel.v1.MemberAddedNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 2;
     option (method_options).legacy_fanout_replacement = "bgs.protocol.arcane.channel.LegacyFanoutNotificationReplacementV1";
   }
-  
+
   rpc OnLeave (.bgs.protocol.channel.v1.LeaveNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 3;
   }
-  
+
   rpc OnMemberRemoved (.bgs.protocol.channel.v1.MemberRemovedNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 4;
     option (method_options).legacy_fanout_replacement = "bgs.protocol.arcane.channel.LegacyFanoutNotificationReplacementV1";
   }
-  
+
   rpc OnSendMessage (.bgs.protocol.channel.v1.SendMessageNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 5;
     option (method_options).legacy_fanout_replacement = "bgs.protocol.arcane.channel.LegacyFanoutNotificationReplacementV1";
   }
-  
+
   rpc OnUpdateChannelState (.bgs.protocol.channel.v1.UpdateChannelStateNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 6;
     option (method_options).legacy_fanout_replacement = "bgs.protocol.arcane.channel.LegacyFanoutNotificationReplacementV1";
     option (method_options).handle_destination_unreachable = true;
   }
-  
+
   rpc OnUpdateMemberState (.bgs.protocol.channel.v1.UpdateMemberStateNotification) returns (.bgs.protocol.NO_RESPONSE) {
     option (method_options).id = 7;
     option (method_options).legacy_fanout_replacement = "bgs.protocol.arcane.channel.LegacyFanoutNotificationReplacementV1";

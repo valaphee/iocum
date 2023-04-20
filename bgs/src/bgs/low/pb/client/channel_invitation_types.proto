@@ -14,7 +14,7 @@ message ChannelInvitation {
   extend .bgs.protocol.Invitation {
     optional .bgs.protocol.channel.v1.ChannelInvitation channel_invitation = 105;
   }
-  
+
   required .bgs.protocol.channel.v1.ChannelDescription channel_description = 1;
   optional bool reserved = 2 [default = false];
   optional bool rejoin = 3 [default = false];
@@ -25,7 +25,7 @@ message ChannelInvitationParams {
   extend .bgs.protocol.InvitationParams {
     optional .bgs.protocol.channel.v1.ChannelInvitationParams channel_params = 105;
   }
-  
+
   required .bgs.protocol.EntityId channel_id = 1;
   optional bool reserved = 2;
   optional bool rejoin = 3;

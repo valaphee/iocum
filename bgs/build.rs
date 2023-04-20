@@ -119,15 +119,14 @@ impl prost_build::ServiceGenerator for ServiceGenerator {
                     method.name, method.input_type, method.output_type
                 ));
                 buf.push_str(&format!(
-                    "        println!(\"{}::{}({{:?}})\", request);",
-                    service.name, method.name
-                ));
-                buf.push_str(&format!(
-                    "        let response = self.request({}, {}, request).await;",
+                    "        let response = self.request({}, {}, request.clone()).await;",
                     service_hash,
                     methods.get(&method.proto_name).unwrap()
                 ));
-                buf.push_str("        println!(\"{:?}\", response);");
+                buf.push_str(&format!(
+                    "        println!(\"{}::{}({{:?}}) -> {{:?}}\", request, response);",
+                    service.name, method.name
+                ));
                 buf.push_str("        response");
             }
             buf.push_str("    }")

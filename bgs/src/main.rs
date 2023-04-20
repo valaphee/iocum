@@ -135,70 +135,21 @@ async fn main() {
                     let server_service =
                         Arc::new(bgs::RemoteService::new(server_message_tx.clone()));
 
-                    let client_service_2 = client_service.clone();
-                    let (server_request_tx, mut server_request_rx) =
-                        unbounded_channel::<(bgs::protocol::Header, Vec<u8>)>();
-                    tokio::spawn(async move {
-                        loop {
-                            while let Some(request) = server_request_rx.recv().await {
-                                if let Some(response) = client_service_2
-                                    .handle_request(
-                                        request.0.service_hash.unwrap(),
-                                        request.0.method_id.unwrap(),
-                                        &request.1,
-                                    )
-                                    .await
-                                {
-                                    let header = bgs::protocol::Header {
-                                        service_id: 254,
-                                        method_id: None,
-                                        token: request.0.token,
-                                        object_id: None,
-                                        size: Some(response.len() as u32),
-                                        status: Some(0),
-                                        error: vec![],
-                                        timeout: None,
-                                        is_response: None,
-                                        forward_targets: vec![],
-                                        service_hash: None,
-                                        client_id: None,
-                                        fanout_target: vec![],
-                                        client_id_fanout_target: vec![],
-                                        client_record: None,
-                                        original_sender: None,
-                                        sender_token: None,
-                                        router_label: None,
-                                        error_reason: None,
-                                    };
-
-                                    let mut packet_vec =
-                                        vec![0; 2 + header.encoded_len() + response.len()];
-                                    let mut packet = packet_vec.as_mut_slice();
-                                    packet
-                                        .write_u16::<BigEndian>(header.encoded_len() as u16)
-                                        .unwrap();
-                                    header.encode(&mut packet).unwrap();
-                                    packet.write(&response).unwrap();
-                                    server_message_tx.send(packet_vec).unwrap();
-                                }
-                            }
-                        }
-                    });
-
+                    // client -> server rpc handler
                     let server_service_2 = server_service.clone();
                     let (client_request_tx, mut client_request_rx) =
                         unbounded_channel::<(bgs::protocol::Header, Vec<u8>)>();
                     tokio::spawn(async move {
                         loop {
                             while let Some(request) = client_request_rx.recv().await {
-                                if let Some(response) = server_service_2
+                                let response = server_service_2
                                     .handle_request(
                                         request.0.service_hash.unwrap(),
                                         request.0.method_id.unwrap(),
                                         &request.1,
                                     )
-                                    .await
-                                {
+                                    .await;
+                                if let Some(response) = response {
                                     let header = bgs::protocol::Header {
                                         service_id: 254,
                                         method_id: None,
@@ -235,6 +186,58 @@ async fn main() {
                         }
                     });
 
+                    // server -> client rpc handler
+                    let client_service_2 = client_service.clone();
+                    let (server_request_tx, mut server_request_rx) =
+                        unbounded_channel::<(bgs::protocol::Header, Vec<u8>)>();
+                    tokio::spawn(async move {
+                        loop {
+                            while let Some(request) = server_request_rx.recv().await {
+                                let response = client_service_2
+                                    .handle_request(
+                                        request.0.service_hash.unwrap(),
+                                        request.0.method_id.unwrap(),
+                                        &request.1,
+                                    )
+                                    .await;
+                                if let Some(response) = response {
+                                    let header = bgs::protocol::Header {
+                                        service_id: 254,
+                                        method_id: None,
+                                        token: request.0.token,
+                                        object_id: None,
+                                        size: Some(response.len() as u32),
+                                        status: Some(0),
+                                        error: vec![],
+                                        timeout: None,
+                                        is_response: None,
+                                        forward_targets: vec![],
+                                        service_hash: None,
+                                        client_id: None,
+                                        fanout_target: vec![],
+                                        client_id_fanout_target: vec![],
+                                        client_record: None,
+                                        original_sender: None,
+                                        sender_token: None,
+                                        router_label: None,
+                                        error_reason: None,
+                                    };
+
+                                    let mut packet_vec =
+                                        vec![0; 2 + header.encoded_len() + response.len()];
+                                    let mut packet = packet_vec.as_mut_slice();
+                                    packet
+                                        .write_u16::<BigEndian>(header.encoded_len() as u16)
+                                        .unwrap();
+                                    header.encode(&mut packet).unwrap();
+                                    packet.write(&response).unwrap();
+                                    server_message_tx.send(packet_vec).unwrap();
+                                }
+                            }
+                        }
+                    });
+
+                    // client rpc connection
                     tokio::spawn(async move {
                         loop {
                             tokio::select! {
@@ -262,6 +265,7 @@ async fn main() {
                         }
                     });
 
+                    // server rpc connection
                     tokio::spawn(async move {
                         loop {
                             tokio::select! {

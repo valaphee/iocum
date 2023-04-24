@@ -1,0 +1,11 @@
+[package]
+name = "staxnbt"
+version = "0.0.0"
+edition = "2021"
+repository = "https://github.com/valaphee/stax.git"
+
+[dependencies]
+byteorder = "1.4.3"
+num_enum = "0.6.1"
+serde = "1.0.160"
+thiserror = "1.0.40"

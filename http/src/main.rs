@@ -87,7 +87,7 @@ async fn main() {
     let remote_host = remote_uri.host().unwrap().to_string();
     let remote_addr = format!(
         "{}:{}",
-        remote_uri.host().unwrap(),
+        remote_host,
         remote_uri.port().map_or(443, |port| port.as_u16())
     )
     .to_socket_addrs()

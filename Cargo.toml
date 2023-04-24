@@ -2,6 +2,9 @@
 members = [
     "bgs",
     "http",
+    "mcje",
+    "mcje_derive",
+    "nbt",
     "tls"
 ]
 resolver = "2"

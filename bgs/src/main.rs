@@ -1,4 +1,4 @@
-use std::{io::Write, path::PathBuf, sync::Arc, time::SystemTime};
+use std::{io::Write, path::PathBuf, sync::Arc};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use clap::{arg, Parser};
@@ -335,10 +335,10 @@ async fn main() {
                 let certificate_bundle = format!(
                     "{:1$}",
                     serde_json::to_string(&CertificateBundle {
-                        created: SystemTime::now()
+                        created: /*SystemTime::now()
                             .duration_since(SystemTime::UNIX_EPOCH)
                             .unwrap()
-                            .as_millis() as u64,
+                            .as_millis() as u64*/1612222344,
                         certificates: certs.clone(),
                         public_keys: certs,
                         signing_certificates: vec![CertificateBundleCertificate {

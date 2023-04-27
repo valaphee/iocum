@@ -4,6 +4,7 @@ members = [
     "http",
     "mcje",
     "mcje_derive",
+    "mojang_session_api",
     "nbt",
     "tls"
 ]

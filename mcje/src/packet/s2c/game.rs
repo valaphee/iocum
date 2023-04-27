@@ -3,14 +3,12 @@ use std::{collections::HashMap, io::Write};
 use glam::{DVec3, IVec3};
 use uuid::Uuid;
 
-use mojang_session_api::models::User;
-
 use crate::{
     types::{
         Advancement, Anchor, Angle, BossEventColor, BossEventOverlay, ChatSession, ChatTypeBound,
         Component, Difficulty, EntityData, EntityDataValue, EquipmentSlot, GameType, Hand,
         ItemStack, Json, MapDecoration, MapPatch, MerchantOffer, Nbt, Recipe, Registries, Sound,
-        SoundSource, TrailingBytes, VarI32, VarI64,
+        SoundSource, TrailingBytes, User, VarI32, VarI64,
     },
     Decode, Encode, Result,
 };

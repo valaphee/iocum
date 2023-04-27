@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/@openapitools/openapi-generator-cli/config.schema.json",
+  "spaces": 2,
+  "generator-cli": {
+    "version": "6.5.0",
+    "generators": {
+      "mojang_session_api": {
+        "generatorName": "rust",
+        "output": "#{name}",
+        "inputSpec": "mojang_session_api.yaml",
+        "additionalProperties": {
+          "packageName": "mojang_session_api"
+        }
+      }
+    }
+  }
+}

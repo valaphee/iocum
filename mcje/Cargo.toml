@@ -25,4 +25,10 @@ staxnbt = { path = "../nbt" }
 staxmcje_derive = { path = "../mcje_derive" }
 
 [dev-dependencies]
+clap = "4.2.4"
 rand = "0.8.5"
+tokio = { version = "1.27.0", features = ["full"] }
+
+[[example]]
+name = "mcje_mitm"
+path = "examples/mitm.rs"

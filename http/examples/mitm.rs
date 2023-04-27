@@ -19,23 +19,21 @@ use tokio_rustls::{
 use staxtls::ResolvesServerCertAutogen;
 
 #[derive(Parser)]
-enum Arguments {
-    Mitm {
-        remote_uri: Uri,
-        #[arg(long)]
-        local_uri: Option<Uri>,
+struct Arguments {
+    remote_uri: Uri,
+    #[arg(long)]
+    local_uri: Option<Uri>,
 
-        #[arg(long)]
-        default_sni: Option<String>,
+    #[arg(long)]
+    default_sni: Option<String>,
 
-        #[arg(long)]
-        http2: bool,
-    },
+    #[arg(long)]
+    http2: bool,
 }
 
 #[tokio::main]
 async fn main() {
-    let Arguments::Mitm {
+    let Arguments {
         remote_uri,
         local_uri,
         default_sni,
@@ -48,8 +46,8 @@ async fn main() {
         local_uri.host().unwrap(),
         local_uri.port().map_or(443, |port| port.as_u16())
     ))
-    .await
-    .unwrap();
+        .await
+        .unwrap();
 
     // setup tls server config
     let mut tls_server_config = ServerConfig::builder()
@@ -90,10 +88,10 @@ async fn main() {
         remote_host,
         remote_uri.port().map_or(443, |port| port.as_u16())
     )
-    .to_socket_addrs()
-    .unwrap()
-    .next()
-    .unwrap();
+        .to_socket_addrs()
+        .unwrap()
+        .next()
+        .unwrap();
 
     loop {
         let (stream, address) = listener.accept().await.unwrap();
@@ -183,9 +181,9 @@ async fn main() {
 pub struct TokioExecutor;
 
 impl<F> hyper::rt::Executor<F> for TokioExecutor
-where
-    F: std::future::Future + Send + 'static,
-    F::Output: Send + 'static,
+    where
+        F: std::future::Future + Send + 'static,
+        F::Output: Send + 'static,
 {
     fn execute(&self, fut: F) {
         tokio::task::spawn(fut);

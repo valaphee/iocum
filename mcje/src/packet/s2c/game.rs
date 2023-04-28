@@ -1,5 +1,6 @@
 use std::{collections::HashMap, io::Write};
 
+use derivative::Derivative;
 use glam::{DVec3, IVec3};
 use uuid::Uuid;
 
@@ -894,9 +895,12 @@ pub enum GameEventPacketEvent {
     ImmediateRespawn,
 }
 
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Encode, Decode, Clone, Derivative)]
+#[derivative(Debug)]
 pub struct LevelChunkPacketData {
+    #[derivative(Debug = "ignore")]
     pub heightmaps: Nbt<serde_value::Value>,
+    #[derivative(Debug = "ignore")]
     pub buffer: Vec<u8>,
     pub block_entities_data: Vec<LevelChunkPacketDataBlockEntity>,
 }
@@ -910,14 +914,21 @@ pub struct LevelChunkPacketDataBlockEntity {
     pub data: Nbt<serde_value::Value>,
 }
 
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Encode, Decode, Clone, Derivative)]
+#[derivative(Debug)]
 pub struct LightUpdatePacketData {
     pub trust_edges: bool,
+    #[derivative(Debug = "ignore")]
     pub sky_y_mask: Vec<i64>,
+    #[derivative(Debug = "ignore")]
     pub block_y_mask: Vec<i64>,
+    #[derivative(Debug = "ignore")]
     pub empty_sky_y_mask: Vec<i64>,
+    #[derivative(Debug = "ignore")]
     pub empty_block_y_mask: Vec<i64>,
+    #[derivative(Debug = "ignore")]
     pub sky_updates: Vec<Vec<u8>>,
+    #[derivative(Debug = "ignore")]
     pub block_updates: Vec<Vec<u8>>,
 }
 

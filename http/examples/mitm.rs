@@ -20,6 +20,7 @@ use staxtls::ResolvesServerCertAutogen;
 
 #[derive(Parser)]
 struct Arguments {
+    #[arg(long)]
     remote_uri: Uri,
     #[arg(long)]
     local_uri: Option<Uri>,
@@ -46,8 +47,8 @@ async fn main() {
         local_uri.host().unwrap(),
         local_uri.port().map_or(443, |port| port.as_u16())
     ))
-        .await
-        .unwrap();
+    .await
+    .unwrap();
 
     // setup tls server config
     let mut tls_server_config = ServerConfig::builder()
@@ -88,19 +89,19 @@ async fn main() {
         remote_host,
         remote_uri.port().map_or(443, |port| port.as_u16())
     )
-        .to_socket_addrs()
-        .unwrap()
-        .next()
-        .unwrap();
+    .to_socket_addrs()
+    .unwrap()
+    .next()
+    .unwrap();
 
     loop {
-        let (stream, address) = listener.accept().await.unwrap();
+        let (socket, address) = listener.accept().await.unwrap();
         let tls_acceptor = tls_acceptor.clone();
         let tls_connector = tls_connector.clone();
         let remote_host = remote_host.clone();
 
         tokio::task::spawn(async move {
-            let stream = tls_acceptor.accept(stream).await.unwrap();
+            let socket = tls_acceptor.accept(socket).await.unwrap();
             let service = service_fn(move |mut request: Request<Incoming>| {
                 println!("<< {address}");
                 println!(
@@ -130,14 +131,17 @@ async fn main() {
                 };
 
                 async move {
-                    let stream = TcpStream::connect(&remote_addr).await.unwrap();
-                    let stream = tls_connector
-                        .connect(ServerName::try_from(remote_host.as_str()).unwrap(), stream)
+                    let remote_socket = TcpStream::connect(&remote_addr).await.unwrap();
+                    let remote_socket = tls_connector
+                        .connect(
+                            ServerName::try_from(remote_host.as_str()).unwrap(),
+                            remote_socket,
+                        )
                         .await
                         .unwrap();
                     let response = if http2 {
                         let (mut sender, connection) =
-                            client::conn::http2::handshake(TokioExecutor, stream)
+                            client::conn::http2::handshake(TokioExecutor, remote_socket)
                                 .await
                                 .unwrap();
                         tokio::task::spawn(async move {
@@ -146,7 +150,7 @@ async fn main() {
                         sender.send_request(request).await.unwrap()
                     } else {
                         let (mut sender, connection) =
-                            client::conn::http1::handshake(stream).await.unwrap();
+                            client::conn::http1::handshake(remote_socket).await.unwrap();
                         tokio::task::spawn(async move {
                             connection.await.unwrap();
                         });
@@ -164,12 +168,12 @@ async fn main() {
             });
             if http2 {
                 server::conn::http2::Builder::new(TokioExecutor)
-                    .serve_connection(stream, service)
+                    .serve_connection(socket, service)
                     .await
                     .unwrap();
             } else {
                 server::conn::http1::Builder::new()
-                    .serve_connection(stream, service)
+                    .serve_connection(socket, service)
                     .await
                     .unwrap();
             }
@@ -181,9 +185,9 @@ async fn main() {
 pub struct TokioExecutor;
 
 impl<F> hyper::rt::Executor<F> for TokioExecutor
-    where
-        F: std::future::Future + Send + 'static,
-        F::Output: Send + 'static,
+where
+    F: std::future::Future + Send + 'static,
+    F::Output: Send + 'static,
 {
     fn execute(&self, fut: F) {
         tokio::task::spawn(fut);

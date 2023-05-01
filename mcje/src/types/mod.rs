@@ -1,6 +1,7 @@
 use std::{borrow::Cow, io::Write, str::from_utf8};
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use derivative::Derivative;
 use glam::{DVec3, IVec3, Quat, Vec3};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -988,12 +989,14 @@ pub enum MapDecorationType {
     RedX,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Derivative)]
+#[derivative(Debug)]
 pub struct MapPatch {
     pub width: u8,
     pub height: u8,
     pub start_x: u8,
     pub start_y: u8,
+    #[derivative(Debug = "ignore")]
     pub map_colors: Vec<u8>,
 }
 

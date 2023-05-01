@@ -997,55 +997,59 @@ pub struct PlayerInfoUpdatePacketEntry {
 
 impl Encode for PlayerInfoUpdatePacket {
     fn encode(&self, output: &mut impl Write) -> Result<()> {
-        let first_entry = self.entries.first().unwrap();
-        let add_player = first_entry.profile.is_some();
-        let initialize_chat = first_entry.chat_session.is_some();
-        let update_game_mode = first_entry.game_mode.is_some();
-        let update_listed = first_entry.listed.is_some();
-        let update_latency = first_entry.latency.is_some();
-        let update_display_name = first_entry.display_name.is_some();
-        let mut actions = 0i8;
-        if add_player {
-            actions |= 1 << 0;
-        }
-        if initialize_chat {
-            actions |= 1 << 1;
-        }
-        if update_game_mode {
-            actions |= 1 << 2;
-        }
-        if update_listed {
-            actions |= 1 << 3;
-        }
-        if update_latency {
-            actions |= 1 << 4;
-        }
-        if update_display_name {
-            actions |= 1 << 5;
-        }
-        actions.encode(output)?;
-        VarI32(self.entries.len() as i32).encode(output)?;
-        for entry in &self.entries {
+        if let Some(first_entry) = self.entries.first() {
+            let add_player = first_entry.profile.is_some();
+            let initialize_chat = first_entry.chat_session.is_some();
+            let update_game_mode = first_entry.game_mode.is_some();
+            let update_listed = first_entry.listed.is_some();
+            let update_latency = first_entry.latency.is_some();
+            let update_display_name = first_entry.display_name.is_some();
+            let mut actions = 0i8;
             if add_player {
-                entry.profile.as_ref().unwrap().encode(output)?;
-            } else {
-                entry.profile_id.encode(output)?;
+                actions |= 1 << 0;
             }
             if initialize_chat {
-                entry.chat_session.as_ref().unwrap().encode(output)?;
+                actions |= 1 << 1;
             }
             if update_game_mode {
-                entry.game_mode.as_ref().unwrap().encode(output)?;
+                actions |= 1 << 2;
             }
             if update_listed {
-                entry.listed.unwrap().encode(output)?;
+                actions |= 1 << 3;
             }
             if update_latency {
-                entry.latency.unwrap().encode(output)?;
+                actions |= 1 << 4;
             }
             if update_display_name {
-                entry.display_name.as_ref().unwrap().encode(output)?;
+                actions |= 1 << 5;
             }
+            actions.encode(output)?;
+            VarI32(self.entries.len() as i32).encode(output)?;
+            for entry in &self.entries {
+                if add_player {
+                    entry.profile.as_ref().unwrap().encode(output)?;
+                } else {
+                    entry.profile_id.encode(output)?;
+                }
+                if initialize_chat {
+                    entry.chat_session.as_ref().unwrap().encode(output)?;
+                }
+                if update_game_mode {
+                    entry.game_mode.as_ref().unwrap().encode(output)?;
+                }
+                if update_listed {
+                    entry.listed.unwrap().encode(output)?;
+                }
+                if update_latency {
+                    entry.latency.unwrap().encode(output)?;
+                }
+                if update_display_name {
+                    entry.display_name.as_ref().unwrap().encode(output)?;
+                }
+            }
+        } else {
+            0i8.encode(output)?;
+            VarI32(0).encode(output)?;
         }
         Ok(())
     }

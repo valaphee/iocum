@@ -1,8 +1,6 @@
 #![feature(result_flattening)]
 
-use std::{env, net::SocketAddr};
-
-use clap::{builder::Str, Parser};
+use clap::Parser;
 use flate2::Compression;
 use futures::{SinkExt, StreamExt};
 use rand::{rngs::OsRng, Rng};
@@ -34,13 +32,16 @@ struct Arguments {
     access_token: String,
     #[arg(long)]
     selected_profile: Uuid,
+
+    #[arg(long)]
+    none: bool,
 }
 
 #[tokio::main]
 async fn main() {
     let arguments = Arguments::parse();
 
-    let listener = TcpListener::bind(arguments.local_addr.unwrap())
+    let listener = TcpListener::bind(arguments.local_addr.clone().unwrap())
         .await
         .unwrap();
 
@@ -51,10 +52,12 @@ async fn main() {
     }
 }
 
-async fn mitm(socket: TcpStream, arguments: Arguments) -> staxmcje::Result<()> {
+async fn mitm(socket: TcpStream, Arguments {
+    remote_addr, access_token, selected_profile, ..
+}: Arguments) -> staxmcje::Result<()> {
     let mut socket = Framed::new(socket, Codec::default());
 
-    let remote_socket = TcpStream::connect(arguments.remote_addr).await.unwrap();
+    let remote_socket = TcpStream::connect(remote_addr).await.unwrap();
     let mut remote_socket = Framed::new(remote_socket, Codec::default());
 
     match next(&mut socket).await?.decode()? {

@@ -23,7 +23,7 @@ struct Arguments {
     #[arg(long)]
     remote_uri: Uri,
     #[arg(long)]
-    local_uri: Option<Uri>,
+    local_uri: Uri,
 
     #[arg(long)]
     default_sni: Option<String>,
@@ -41,7 +41,6 @@ async fn main() {
         http2,
     } = Arguments::parse();
 
-    let local_uri = local_uri.unwrap();
     let listener = TcpListener::bind(format!(
         "{}:{}",
         local_uri.host().unwrap(),

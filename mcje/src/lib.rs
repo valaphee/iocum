@@ -13,6 +13,7 @@ pub mod types;
 
 #[derive(Error, Debug)]
 pub enum Error {
+    // delegated marshalling errors
     #[error("IO error")]
     Io(#[from] std::io::Error),
     #[error("UTF8 error")]
@@ -21,14 +22,12 @@ pub enum Error {
     Json(#[from] serde_json::Error),
     #[error("Nbt error")]
     Nbt(#[from] staxnbt::error::Error),
-
-    #[error("VarInt wider than {0}-bit")]
-    VarIntTooWide(u8),
+    // marshalling errors
+    #[error("Invalid length")]
+    InvalidLength,
     #[error("Unknown variant: {0}")]
     UnknownVariant(i32),
-    #[error("Remaining bytes: {0}")]
-    RemainingBytes(usize),
-
+    // processing errors
     #[error("Unexpected end")]
     UnexpectedEnd,
     #[error("Unexpected")]

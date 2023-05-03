@@ -13,7 +13,9 @@ pub enum LoginPacket {
         public_key: Vec<u8>,
         nonce: Vec<u8>,
     },
-    GameProfile(User),
+    GameProfile {
+        game_profile: User,
+    },
     LoginCompression {
         #[using(VarI32)]
         compression_threshold: i32,

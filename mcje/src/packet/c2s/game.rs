@@ -41,7 +41,9 @@ pub enum GamePacket {
         signature: Option<[u8; 256]>,
         last_seen_messages: LastSeenMessages,
     },
-    ChatSessionUpdate(ChatSession),
+    ChatSessionUpdate {
+        chat_session: ChatSession,
+    },
     ClientCommand {
         action: ClientCommandPacketAction,
     },

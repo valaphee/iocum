@@ -52,9 +52,15 @@ async fn main() {
     }
 }
 
-async fn mitm(socket: TcpStream, Arguments {
-    remote_addr, access_token, selected_profile, ..
-}: Arguments) -> staxmcje::Result<()> {
+async fn mitm(
+    socket: TcpStream,
+    Arguments {
+        remote_addr,
+        access_token,
+        selected_profile,
+        ..
+    }: Arguments,
+) -> staxmcje::Result<()> {
     let mut socket = Framed::new(socket, Codec::default());
 
     let remote_socket = TcpStream::connect(remote_addr).await.unwrap();
@@ -190,7 +196,7 @@ async fn mitm(socket: TcpStream, Arguments {
                                     );
                                 }
                                 packet => {
-                                    if matches!(packet, s2c::LoginPacket::GameProfile(..)) {
+                                    if matches!(packet, s2c::LoginPacket::GameProfile { .. }) {
                                         encode_and_send(&mut socket, &packet).await;
                                         break;
                                     } else {

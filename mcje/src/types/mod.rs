@@ -128,7 +128,7 @@ impl Decode<'_> for VarI21 {
             }
             shift += 7;
         }
-        Err(Error::VarIntTooWide(21))
+        Err(Error::InvalidLength)
     }
 }
 
@@ -184,7 +184,7 @@ impl Decode<'_> for VarI32 {
             }
             shift += 7;
         }
-        Err(Error::VarIntTooWide(35))
+        Err(Error::InvalidLength)
     }
 }
 
@@ -253,7 +253,7 @@ impl Decode<'_> for VarI64 {
             }
             shift += 7;
         }
-        Err(Error::VarIntTooWide(70))
+        Err(Error::InvalidLength)
     }
 }
 
@@ -356,7 +356,9 @@ pub struct TrailingBytes<const N: usize>(pub Vec<u8>);
 
 impl<const N: usize> Encode for TrailingBytes<N> {
     fn encode(&self, output: &mut impl Write) -> Result<()> {
-        assert!(self.0.len() <= N);
+        if self.0.len() > N {
+            return Err(Error::InvalidLength)
+        }
         output.write_all(&self.0)?;
         Ok(())
     }
@@ -364,7 +366,9 @@ impl<const N: usize> Encode for TrailingBytes<N> {
 
 impl<const N: usize> Decode<'_> for TrailingBytes<N> {
     fn decode(input: &mut &'_ [u8]) -> Result<Self> {
-        assert!(input.len() <= N);
+        if input.len() > N {
+            return Err(Error::InvalidLength)
+        }
         let value = input.to_vec();
         *input = &input[input.len()..];
         Ok(TrailingBytes(value))
@@ -490,7 +494,7 @@ impl Encode for IVec3 {
                 ((self.x as u64) << 38 | (self.z as u64) << 12 | self.y as u64 & 0xFFF)
                     .encode(output)
             }
-            _ => unimplemented!(),
+            _ => Err(Error::InvalidLength),
         }
     }
 }
@@ -989,7 +993,7 @@ pub enum MapDecorationType {
     RedX,
 }
 
-#[derive(Clone, Debug, Derivative)]
+#[derive(Clone, Derivative)]
 #[derivative(Debug)]
 pub struct MapPatch {
     pub width: u8,

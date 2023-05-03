@@ -11,7 +11,7 @@ use crate::{
         ItemStack, Json, MapDecoration, MapPatch, MerchantOffer, Nbt, Recipe, Registries, Sound,
         SoundSource, TrailingBytes, User, VarI32, VarI64,
     },
-    Decode, Encode, Result,
+    Decode, Encode, Error, Result,
 };
 
 #[derive(Encode, Decode, Clone, Debug)]
@@ -745,12 +745,12 @@ impl Decode<'_> for CommandsPacketEntry {
     fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         let flags = i8::decode(input)?;
         let children = Decode::decode(input)?;
-        let redirect_node = if flags & (1 << 3) != 0 {
+        let redirect = if flags & (1 << 3) != 0 {
             Some(Decode::decode(input)?)
         } else {
             None
         };
-        let type_ = match flags & 3 {
+        let stub = match flags & 3 {
             0 => CommandsPacketNodeStub::Root,
             1 => CommandsPacketNodeStub::Literal {
                 id: Decode::decode(input)?,
@@ -764,12 +764,12 @@ impl Decode<'_> for CommandsPacketEntry {
                     None
                 },
             },
-            _ => unreachable!(),
+            _ => return Err(Error::UnknownVariant((flags & 3) as i32)),
         };
         Ok(Self {
             children,
-            redirect: redirect_node,
-            stub: type_,
+            redirect,
+            stub,
         })
     }
 }
@@ -1133,10 +1133,10 @@ impl Encode for SectionBlocksUpdatePacket {
                 ((self.section_pos.x as i64) << 42
                     | ((self.section_pos.z & 0x3FFFFF) as i64) << 20
                     | ((self.section_pos.y & 0xFFFFF) as i64))
-                    .encode(output)?
+                    .encode(output)
             }
-            _ => unimplemented!(),
-        }
+            _ => Err(Error::InvalidLength),
+        }?;
         self.suppress_light_updates.encode(output)?;
         self.position_and_states.encode(output)?;
         Ok(())
@@ -1175,7 +1175,7 @@ impl Encode for SectionBlocksUpdatePacketPositionAndState {
                 (self.block_state) << 12 | (((self.x as i64) << 8) | (self.z << 4 | self.y) as i64),
             )
             .encode(output),
-            _ => unimplemented!(),
+            _ => Err(Error::InvalidLength),
         }
     }
 }
@@ -1235,13 +1235,12 @@ pub struct SetEquipmentPacketSlots(HashMap<EquipmentSlot, Option<ItemStack>>);
 impl Encode for SetEquipmentPacketSlots {
     fn encode(&self, output: &mut impl Write) -> Result<()> {
         if !self.0.is_empty() {
-            for (&equipment_slot, item) in self.0.iter().take(self.0.len() - 1) {
-                (u8::from(equipment_slot) | 0x80).encode(output)?;
+            let mut slots = self.0.iter().peekable();
+            while let Some((&slot, item)) = slots.next() {
+                (u8::from(slot) | if slots.peek().is_some() { 0x80 } else { 0x00 })
+                    .encode(output)?;
                 item.encode(output)?;
             }
-            let (&equipment_slot, item) = self.0.iter().clone().last().unwrap();
-            u8::from(equipment_slot).encode(output)?;
-            item.encode(output)?;
         }
         Ok(())
     }
@@ -1250,14 +1249,16 @@ impl Encode for SetEquipmentPacketSlots {
 impl Decode<'_> for SetEquipmentPacketSlots {
     fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         let mut slots = HashMap::new();
-        while {
-            let equipment_slot_and_next_bit = u8::decode(input)?;
+        loop {
+            let slot_and_next_bit = u8::decode(input)?;
             slots.insert(
-                EquipmentSlot::try_from(equipment_slot_and_next_bit & 0x7F).unwrap(),
+                EquipmentSlot::try_from(slot_and_next_bit & 0x7F).unwrap(),
                 Decode::decode(input)?,
             );
-            equipment_slot_and_next_bit & 0x80 != 0
-        } {}
+            if slot_and_next_bit & 0x80 == 0 {
+                break;
+            }
+        }
         Ok(Self(slots))
     }
 }

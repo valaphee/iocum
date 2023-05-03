@@ -675,14 +675,14 @@ impl Decode<'_> for AdvancementDisplayInfo {
     }
 }
 
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Encode, Decode, Copy, Clone, Debug)]
 pub enum AdvancementFrameType {
     Task,
     Challenge,
     Goal,
 }
 
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Encode, Decode, Copy, Clone, Debug)]
 pub enum Anchor {
     Feet,
     Eyes,
@@ -697,7 +697,7 @@ pub struct Biome {
     pub effects: BiomeEffects,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
 pub enum BiomeTemperatureModifier {
     #[serde(rename = "none")]
     None,
@@ -742,7 +742,7 @@ pub struct BiomeEffectsMoodSound {
     pub offset: f64,
 }
 
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Encode, Decode, Copy, Clone, Debug)]
 pub enum BossEventColor {
     Pink,
     Blue,
@@ -753,7 +753,7 @@ pub enum BossEventColor {
     White,
 }
 
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Encode, Decode, Copy, Clone, Debug)]
 pub enum BossEventOverlay {
     Progress,
     Notched6,
@@ -790,14 +790,14 @@ pub struct ChatTypeDecoration {
     pub parameters: Vec<String>,
 }
 
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Encode, Decode, Copy, Clone, Debug)]
 pub enum ChatVisibility {
     Full,
     System,
     Hidden,
 }
 
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Encode, Decode, Copy, Clone, Debug)]
 pub enum ClickType {
     Pickup,
     QuickMove,
@@ -808,7 +808,7 @@ pub enum ClickType {
     PickupAll,
 }
 
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Encode, Decode, Copy, Clone, Debug)]
 #[using(u8)]
 pub enum Difficulty {
     Peaceful,
@@ -894,7 +894,7 @@ pub enum EquipmentSlot {
     Head,
 }
 
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Encode, Decode, Copy, Clone, Debug)]
 pub enum GameType {
     Survival,
     Creative,
@@ -902,13 +902,13 @@ pub enum GameType {
     Spectator,
 }
 
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Encode, Decode, Copy, Clone, Debug)]
 pub enum Hand {
     MainHand,
     OffHand,
 }
 
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Encode, Decode, Copy, Clone, Debug)]
 pub enum Intention {
     Game,
     Status,
@@ -962,7 +962,7 @@ pub struct MapDecoration {
     pub name: Option<Json<Component>>,
 }
 
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Encode, Decode, Copy, Clone, Debug)]
 pub enum MapDecorationType {
     Player,
     Frame,
@@ -1067,7 +1067,7 @@ impl<T: DeserializeOwned> Decode<'_> for Nbt<T> {
     }
 }
 
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Encode, Decode, Copy, Clone, Debug)]
 pub enum Pose {
     Standing,
     FallFlying,
@@ -1328,7 +1328,7 @@ impl Decode<'_> for Recipe {
     }
 }
 
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Encode, Decode, Copy, Clone, Debug)]
 pub enum RecipeBookType {
     Crafting,
     Furnace,
@@ -1420,7 +1420,7 @@ impl Decode<'_> for Sound {
     }
 }
 
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Encode, Decode, Copy, Clone, Debug)]
 pub enum SoundSource {
     Master,
     Music,

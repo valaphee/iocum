@@ -357,7 +357,7 @@ pub struct TrailingBytes<const N: usize>(pub Vec<u8>);
 impl<const N: usize> Encode for TrailingBytes<N> {
     fn encode(&self, output: &mut impl Write) -> Result<()> {
         if self.0.len() > N {
-            return Err(Error::InvalidLength)
+            return Err(Error::InvalidLength);
         }
         output.write_all(&self.0)?;
         Ok(())
@@ -367,7 +367,7 @@ impl<const N: usize> Encode for TrailingBytes<N> {
 impl<const N: usize> Decode<'_> for TrailingBytes<N> {
     fn decode(input: &mut &'_ [u8]) -> Result<Self> {
         if input.len() > N {
-            return Err(Error::InvalidLength)
+            return Err(Error::InvalidLength);
         }
         let value = input.to_vec();
         *input = &input[input.len()..];

@@ -1,4 +1,7 @@
-use std::{net::ToSocketAddrs, sync::Arc};
+use std::{
+    net::{SocketAddr, ToSocketAddrs},
+    sync::Arc,
+};
 
 use clap::{arg, Parser};
 use hyper::{
@@ -82,10 +85,9 @@ async fn main() {
     }
     let tls_connector = TlsConnector::from(Arc::new(tls_client_config));
 
-    let remote_host = remote_uri.host().unwrap().to_string();
     let remote_addr = format!(
         "{}:{}",
-        remote_host,
+        remote_uri.host().unwrap(),
         remote_uri.port().map_or(443, |port| port.as_u16())
     )
     .to_socket_addrs()
@@ -97,86 +99,106 @@ async fn main() {
         let (socket, address) = listener.accept().await.unwrap();
         let tls_acceptor = tls_acceptor.clone();
         let tls_connector = tls_connector.clone();
-        let remote_host = remote_host.clone();
-
+        let remote_host = remote_uri.host().unwrap().to_string();
         tokio::task::spawn(async move {
-            let socket = tls_acceptor.accept(socket).await.unwrap();
-            let service = service_fn(move |mut request: Request<Incoming>| {
-                println!("<< {address}");
-                println!(
-                    "{} {} {:?}",
-                    request.method(),
-                    request.uri(),
-                    request.version()
-                );
-                for (header_name, header_value) in request.headers().iter() {
-                    println!("{}: {}", header_name, header_value.to_str().unwrap());
-                }
+            handle(
+                socket,
+                address,
+                tls_acceptor,
+                tls_connector,
+                remote_host,
+                remote_addr,
+                http2,
+            )
+        });
+    }
+}
 
-                let tls_connector = tls_connector.clone();
-                let remote_host = remote_host.clone();
+async fn handle(
+    socket: TcpStream,
+    address: SocketAddr,
+    tls_acceptor: TlsAcceptor,
+    tls_connector: TlsConnector,
+    remote_host: String,
+    remote_addr: SocketAddr,
+    http2: bool,
+) {
+    let service = service_fn(move |mut request: Request<Incoming>| {
+        println!("<< {address}");
+        println!(
+            "{} {} {:?}",
+            request.method(),
+            request.uri(),
+            request.version()
+        );
+        for (header_name, header_value) in request.headers().iter() {
+            println!("{}: {}", header_name, header_value.to_str().unwrap());
+        }
 
-                let request = if http2 {
-                    let (mut request_parts, request_body) = request.into_parts();
-                    let mut uri_parts = request_parts.uri.into_parts();
-                    uri_parts.authority = Some(Authority::try_from(remote_host.clone()).unwrap());
-                    request_parts.uri = Uri::from_parts(uri_parts).unwrap();
-                    Request::from_parts(request_parts, request_body)
-                } else {
-                    request
-                        .headers_mut()
-                        .insert(HOST, HeaderValue::from_str(&remote_host).unwrap());
-                    request
-                };
+        let request = if http2 {
+            let (mut request_parts, request_body) = request.into_parts();
+            let mut uri_parts = request_parts.uri.into_parts();
+            uri_parts.authority = Some(Authority::try_from(remote_host.clone()).unwrap());
+            request_parts.uri = Uri::from_parts(uri_parts).unwrap();
+            Request::from_parts(request_parts, request_body)
+        } else {
+            request
+                .headers_mut()
+                .insert(HOST, HeaderValue::from_str(&remote_host).unwrap());
+            request
+        };
 
-                async move {
-                    let remote_socket = TcpStream::connect(&remote_addr).await.unwrap();
-                    let remote_socket = tls_connector
-                        .connect(
-                            ServerName::try_from(remote_host.as_str()).unwrap(),
-                            remote_socket,
-                        )
+        let tls_connector = tls_connector.clone();
+        let remote_host = remote_host.clone();
+        async move {
+            let remote_socket = TcpStream::connect(&remote_addr).await.unwrap();
+            let remote_socket = tls_connector
+                .connect(
+                    ServerName::try_from(remote_host.as_str()).unwrap(),
+                    remote_socket,
+                )
+                .await
+                .unwrap();
+
+            let response = if http2 {
+                let (mut sender, connection) =
+                    client::conn::http2::handshake(TokioExecutor, remote_socket)
                         .await
                         .unwrap();
-                    let response = if http2 {
-                        let (mut sender, connection) =
-                            client::conn::http2::handshake(TokioExecutor, remote_socket)
-                                .await
-                                .unwrap();
-                        tokio::task::spawn(async move {
-                            connection.await.unwrap();
-                        });
-                        sender.send_request(request).await.unwrap()
-                    } else {
-                        let (mut sender, connection) =
-                            client::conn::http1::handshake(remote_socket).await.unwrap();
-                        tokio::task::spawn(async move {
-                            connection.await.unwrap();
-                        });
-                        sender.send_request(request).await.unwrap()
-                    };
-
-                    println!(">> {address}");
-                    println!("{:?} {}", response.version(), response.status().as_str());
-                    for (header_name, header_value) in response.headers().iter() {
-                        println!("{}: {}", header_name, header_value.to_str().unwrap());
-                    }
-
-                    Ok::<_, Error>(response)
-                }
-            });
-            if http2 {
-                server::conn::http2::Builder::new(TokioExecutor)
-                    .serve_connection(socket, service)
-                    .await
-                    .unwrap();
+                tokio::task::spawn(async move {
+                    connection.await.unwrap();
+                });
+                sender.send_request(request).await.unwrap()
             } else {
-                server::conn::http1::Builder::new()
-                    .serve_connection(socket, service)
-                    .await
-                    .unwrap();
+                let (mut sender, connection) =
+                    client::conn::http1::handshake(remote_socket).await.unwrap();
+                tokio::task::spawn(async move {
+                    connection.await.unwrap();
+                });
+                sender.send_request(request).await.unwrap()
+            };
+
+            println!(">> {address}");
+            println!("{:?} {}", response.version(), response.status().as_str());
+            for (header_name, header_value) in response.headers().iter() {
+                println!("{}: {}", header_name, header_value.to_str().unwrap());
             }
-        });
+
+            Ok::<_, Error>(response)
+        }
+    });
+
+    let socket = tls_acceptor.accept(socket).await.unwrap();
+    if http2 {
+        server::conn::http2::Builder::new(TokioExecutor)
+            .serve_connection(socket, service)
+            .await
+            .unwrap();
+    } else {
+        server::conn::http1::Builder::new()
+            .serve_connection(socket, service)
+            .await
+            .unwrap();
     }
 }
 

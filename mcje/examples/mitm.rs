@@ -14,7 +14,12 @@ use mojang_session_api::{
     apis::{configuration::Configuration, default_api::join_server},
     models::JoinServerRequest,
 };
-use staxmcje::{codec::Codec, packet::{c2s, s2c}, types::Intention, Decode, Encode, Error};
+use staxmcje::{
+    codec::Codec,
+    packet::{c2s, s2c},
+    types::Intention,
+    Decode, Encode, Error,
+};
 
 #[derive(Parser, Clone)]
 struct Arguments {
@@ -27,32 +32,30 @@ struct Arguments {
     access_token: String,
     #[arg(long)]
     selected_profile: Uuid,
-
-    #[arg(long)]
-    none: bool,
 }
 
 #[tokio::main]
 async fn main() {
     let arguments = Arguments::parse();
 
-    let listener = TcpListener::bind(arguments.addr.clone())
-        .await
-        .unwrap();
+    let listener = TcpListener::bind(arguments.addr.clone()).await.unwrap();
 
     loop {
-        mitm(listener.accept().await.unwrap().0, arguments.clone()).await.unwrap();
+        let socket = listener.accept().await.unwrap().0;
+        let arguments = arguments.clone();
+        tokio::task::spawn(async move {
+            handle(socket, arguments).await.unwrap();
+        });
     }
 }
 
-async fn mitm(
+async fn handle(
     socket: TcpStream,
     Arguments {
         addr,
         remote_addr,
         access_token,
         selected_profile,
-        ..
     }: Arguments,
 ) -> staxmcje::Result<()> {
     let mut socket = Framed::new(socket, Codec::default());
@@ -66,7 +69,7 @@ async fn mitm(
         } => {
             let remote_addr = remote_addr.unwrap_or(format!("{host_name}:{port}"));
             if remote_addr == addr {
-                return Err(Error::Unexpected)
+                return Err(Error::Unexpected);
             }
             let remote_socket = TcpStream::connect(remote_addr.clone()).await.unwrap();
             let mut remote_socket = Framed::new(remote_socket, Codec::default());
@@ -76,11 +79,12 @@ async fn mitm(
                 &mut remote_socket,
                 &c2s::HandshakePacket::Intention {
                     protocol_version,
-                    port: remote_addr_split.next().unwrap().parse().unwrap(),
                     host_name: remote_addr_split.next().unwrap().to_string(),
+                    port: remote_addr_split.next().unwrap().parse().unwrap(),
                     intention,
                 },
-            ).await;
+            )
+            .await;
 
             match intention {
                 Intention::Status => {
@@ -144,10 +148,11 @@ async fn mitm(
                                     ),
                                 }),
                             )
-                                .await
-                                .unwrap();
+                            .await
+                            .unwrap();
 
-                            let public_key = RsaPublicKey::from_public_key_der(&public_key).unwrap();
+                            let public_key =
+                                RsaPublicKey::from_public_key_der(&public_key).unwrap();
                             encode_and_send(
                                 &mut remote_socket,
                                 &c2s::LoginPacket::Key {
@@ -159,7 +164,7 @@ async fn mitm(
                                         .unwrap(),
                                 },
                             )
-                                .await;
+                            .await;
                             remote_socket.codec_mut().enable_encryption(&key);
 
                             loop {
@@ -177,7 +182,7 @@ async fn mitm(
                                                 compression_threshold,
                                             },
                                         )
-                                            .await;
+                                        .await;
                                         socket.codec_mut().enable_compression(
                                             Compression::default(),
                                             compression_threshold as u16,
@@ -193,6 +198,7 @@ async fn mitm(
                                     }
                                 }
                             }
+
                             loop {
                                 tokio::select! {
                                     packet = next(&mut socket) => {
@@ -217,7 +223,7 @@ async fn mitm(
                 }
                 _ => return Err(Error::Unexpected),
             }
-        },
+        }
     }
 
     Ok(())

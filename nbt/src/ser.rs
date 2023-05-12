@@ -17,14 +17,13 @@ where
         last_type: TagType::default(),
     };
     value.serialize(&mut ser)?;
-
+    // write and splice in first named tag header
     let mut header = Vec::new();
     header.write_i8(ser.last_type.into())?;
     if ser.last_type != TagType::End {
         header.write_i16::<BigEndian>(0)?;
     }
     ser.data.splice(0..0, header);
-
     Ok(ser.data)
 }
 
@@ -134,7 +133,8 @@ impl<'ser> serde::ser::Serializer for &'ser mut Serializer {
     }
 
     fn serialize_none(self) -> Result<Self::Ok> {
-        self.last_type = TagType::End;
+        // will be skipped
+        self.last_type = TagType::default();
         Ok(())
     }
 
@@ -142,12 +142,12 @@ impl<'ser> serde::ser::Serializer for &'ser mut Serializer {
     where
         T: serde::Serialize,
     {
-        // this is only needed for support writing optional fields
         value.serialize(self)
     }
 
     fn serialize_unit(self) -> Result<Self::Ok> {
-        self.last_type = TagType::End;
+        // will be skipped
+        self.last_type = TagType::default();
         Ok(())
     }
 
@@ -189,12 +189,10 @@ impl<'ser> serde::ser::Serializer for &'ser mut Serializer {
     }
 
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
-        // Write empty header, as type and length is not known yet
+        // write empty list header (type and length is not known beforehand)
         let header_offset = self.data.len();
-        self.data.write_i8(0)?;
+        self.data.write_i8(TagType::default().into())?;
         self.data.write_i32::<BigEndian>(0)?;
-
-        // Reset type_, so that an empty list is of type TagType::End
         self.last_type = TagType::End;
         Ok(SerializeSeq {
             ser: self,
@@ -267,15 +265,14 @@ impl<'a> serde::ser::SerializeSeq for SerializeSeq<'a> {
         T: serde::Serialize,
     {
         self.count += 1;
-
         value.serialize(&mut *self.ser)
     }
 
     fn end(self) -> Result<Self::Ok> {
+        // write list header
         let mut header = &mut self.ser.data[self.header_offset..self.header_offset + 5];
         header.write_i8(self.ser.last_type.into())?;
         header.write_i32::<BigEndian>(self.count)?;
-
         self.ser.last_type = TagType::List;
         Ok(())
     }
@@ -344,8 +341,8 @@ impl<'a> serde::ser::SerializeMap for SerializeMap<'a> {
         T: serde::Serialize,
     {
         self.header_offset = self.ser.data.len();
-        self.ser.data.write_i8(TagType::End.into())?;
-
+        // write empty named tag header (type is not known beforehand)
+        self.ser.data.write_i8(TagType::default().into())?;
         key.serialize(&mut *self.ser)
     }
 
@@ -354,14 +351,14 @@ impl<'a> serde::ser::SerializeMap for SerializeMap<'a> {
         T: serde::Serialize,
     {
         value.serialize(&mut *self.ser)?;
-
+        // write named tag header
         let mut header = &mut self.ser.data[self.header_offset..self.header_offset + 1];
         header.write_i8(self.ser.last_type.into())?;
         Ok(())
     }
 
     fn end(self) -> Result<Self::Ok> {
-        self.ser.data.write_i8(TagType::End.into())?;
+        self.ser.data.write_i8(TagType::default().into())?;
         self.ser.last_type = TagType::Compound;
         Ok(())
     }
@@ -377,21 +374,20 @@ impl<'a> serde::ser::SerializeStruct for &'a mut Serializer {
     {
         let header_offset = self.data.len();
         value.serialize(&mut **self)?;
-
-        // Write field, or omit if the field is not existent, see serialize_none
-        if self.last_type != TagType::End {
+        // write named tag header
+        if self.last_type != TagType::default() {
             let mut header = Vec::new();
             header.write_i8(self.last_type.into())?;
-            let name_bytes = key.as_bytes();
-            header.write_i16::<BigEndian>(name_bytes.len() as i16)?;
-            header.write_all(name_bytes)?;
+            let name = key.as_bytes();
+            header.write_i16::<BigEndian>(name.len() as i16)?;
+            header.write_all(name)?;
             self.data.splice(header_offset..header_offset, header);
         }
         Ok(())
     }
 
     fn end(self) -> Result<Self::Ok> {
-        self.data.write_i8(TagType::End.into())?;
+        self.data.write_i8(TagType::default().into())?;
         self.last_type = TagType::Compound;
         Ok(())
     }

@@ -31,10 +31,11 @@ impl<'de> Deserializer<'de> {
             name: false,
             current_type: TagType::default(),
         };
+        // read first named tag header
         let type_ = TagType::try_from(self_.data.read_i8()?).unwrap();
         if type_ != TagType::End {
             let name_length = self_.data.read_i16::<BigEndian>()?;
-            let (_, data) = self_.data.split_at(name_length as usize);
+            let (_name, data) = self_.data.split_at(name_length as usize);
             self_.data = data;
         }
         self_.current_type = type_;
@@ -46,7 +47,7 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
     type Error = Error;
 
     forward_to_deserialize_any! {
-        i8 i16 i32 i64 f32 f64 char str string bytes byte_buf unit unit_struct
+        i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str string bytes byte_buf unit unit_struct
         newtype_struct seq tuple tuple_struct map struct enum identifier ignored_any
     }
 
@@ -56,11 +57,10 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
     {
         if self.name {
             self.name = false;
-
-            let length = self.data.read_i16::<BigEndian>()?;
-            let (bytes, data) = self.data.split_at(length as usize);
+            let name_length = self.data.read_i16::<BigEndian>()?;
+            let (name, data) = self.data.split_at(name_length as usize);
             self.data = data;
-            visitor.visit_str(std::str::from_utf8(bytes).unwrap())
+            visitor.visit_str(std::str::from_utf8(name).unwrap())
         } else {
             match self.current_type {
                 TagType::End => visitor.visit_unit(),
@@ -76,10 +76,10 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
                     de: self,
                 }),
                 TagType::String => {
-                    let length = self.data.read_i16::<BigEndian>()?;
-                    let (bytes, data) = self.data.split_at(length as usize);
+                    let value_length = self.data.read_i16::<BigEndian>()?;
+                    let (value, data) = self.data.split_at(value_length as usize);
                     self.data = data;
-                    visitor.visit_str(std::str::from_utf8(bytes).unwrap())
+                    visitor.visit_str(std::str::from_utf8(value).unwrap())
                 }
                 TagType::List => visitor.visit_seq(SeqAccess {
                     type_: TagType::try_from(self.data.read_i8()?).unwrap(),
@@ -116,55 +116,10 @@ impl<'de, 'a> serde::de::Deserializer<'de> for &'a mut Deserializer<'de> {
         }
     }
 
-    fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        if !self.name && self.current_type == TagType::Byte {
-            visitor.visit_u8(self.data.read_u8()?)
-        } else {
-            self.deserialize_any(visitor)
-        }
-    }
-
-    fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        if !self.name && self.current_type == TagType::Short {
-            visitor.visit_u16(self.data.read_u16::<BigEndian>()?)
-        } else {
-            self.deserialize_any(visitor)
-        }
-    }
-
-    fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        if !self.name && self.current_type == TagType::Int {
-            visitor.visit_u32(self.data.read_u32::<BigEndian>()?)
-        } else {
-            self.deserialize_any(visitor)
-        }
-    }
-
-    fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        if !self.name && self.current_type == TagType::Long {
-            visitor.visit_u64(self.data.read_u64::<BigEndian>()?)
-        } else {
-            self.deserialize_any(visitor)
-        }
-    }
-
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value>
     where
         V: serde::de::Visitor<'de>,
     {
-        // this is only needed for support reading optional fields
         visitor.visit_some(self)
     }
 
@@ -187,11 +142,12 @@ impl<'a, 'de> serde::de::SeqAccess<'de> for SeqAccess<'a, 'de> {
     where
         T: serde::de::DeserializeSeed<'de>,
     {
+        // check if list is fully read
         if self.count == 0 {
             return Ok(None);
         }
         self.count -= 1;
-
+        // reset the current type
         self.de.current_type = self.type_;
         seed.deserialize(&mut *self.de).map(Some)
     }
@@ -208,6 +164,7 @@ impl<'a, 'de> serde::de::MapAccess<'de> for &'a mut Deserializer<'de> {
     where
         K: serde::de::DeserializeSeed<'de>,
     {
+        // read named tag header
         self.current_type = TagType::try_from(self.data.read_i8()?).unwrap();
         if !matches!(self.current_type, TagType::End) {
             self.name = true;

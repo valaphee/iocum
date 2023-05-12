@@ -374,7 +374,7 @@ impl<'a> serde::ser::SerializeStruct for &'a mut Serializer {
     {
         let header_offset = self.data.len();
         value.serialize(&mut **self)?;
-        // write named tag header
+        // write (and splice in) named tag header
         if self.last_type != TagType::default() {
             let mut header = Vec::new();
             header.write_i8(self.last_type.into())?;

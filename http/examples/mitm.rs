@@ -22,15 +22,18 @@ use tokio_rustls::{
 use staxtls::ResolvesServerCertAutogen;
 
 #[derive(Parser)]
+#[command(about)]
 struct Arguments {
+    /// Uri to bind to
+    #[arg(long)]
+    uri: Uri,
+    /// Uri to connect to, if empty transparent mode will be used
     #[arg(long)]
     remote_uri: Uri,
-    #[arg(long)]
-    local_uri: Uri,
-
+    /// Default server name indicator
     #[arg(long)]
     default_sni: Option<String>,
-
+    /// Use HTTP 2.0
     #[arg(long)]
     http2: bool,
 }
@@ -38,33 +41,31 @@ struct Arguments {
 #[tokio::main]
 async fn main() {
     let Arguments {
+        uri,
         remote_uri,
-        local_uri,
         default_sni,
         http2,
     } = Arguments::parse();
-
+    // bind listener
     let listener = TcpListener::bind(format!(
         "{}:{}",
-        local_uri.host().unwrap(),
-        local_uri.port().map_or(443, |port| port.as_u16())
+        uri.host().unwrap(),
+        uri.port().map_or(443, |port| port.as_u16())
     ))
     .await
     .unwrap();
-
     // setup tls server config
     let mut tls_server_config = ServerConfig::builder()
         .with_safe_defaults()
         .with_no_client_auth()
         .with_cert_resolver(Arc::new(ResolvesServerCertAutogen::new(
             "certs",
-            default_sni.unwrap_or(local_uri.host().unwrap().to_string()),
+            default_sni.unwrap_or(uri.host().unwrap().to_string()),
         )));
     if http2 {
         tls_server_config.alpn_protocols = vec![b"h2".to_vec()];
     }
     let tls_acceptor = TlsAcceptor::from(Arc::new(tls_server_config));
-
     // setup tls client config
     let mut root_cert_store = RootCertStore::empty();
     root_cert_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(
@@ -84,7 +85,7 @@ async fn main() {
         tls_client_config.alpn_protocols = vec![b"h2".to_vec()];
     }
     let tls_connector = TlsConnector::from(Arc::new(tls_client_config));
-
+    // prepare remote address
     let remote_addr = format!(
         "{}:{}",
         remote_uri.host().unwrap(),
@@ -94,9 +95,10 @@ async fn main() {
     .unwrap()
     .next()
     .unwrap();
-
+    // for each connection
     loop {
         let (socket, address) = listener.accept().await.unwrap();
+        // spawn new task to handle connection
         let tls_acceptor = tls_acceptor.clone();
         let tls_connector = tls_connector.clone();
         let remote_host = remote_uri.host().unwrap().to_string();
@@ -124,6 +126,7 @@ async fn handle(
     http2: bool,
 ) {
     let service = service_fn(move |mut request: Request<Incoming>| {
+        // log request
         println!("<< {address}");
         println!(
             "{} {} {:?}",
@@ -134,7 +137,7 @@ async fn handle(
         for (header_name, header_value) in request.headers().iter() {
             println!("{}: {}", header_name, header_value.to_str().unwrap());
         }
-
+        // transform request
         let request = if http2 {
             let (mut request_parts, request_body) = request.into_parts();
             let mut uri_parts = request_parts.uri.into_parts();
@@ -147,7 +150,6 @@ async fn handle(
                 .insert(HOST, HeaderValue::from_str(&remote_host).unwrap());
             request
         };
-
         let tls_connector = tls_connector.clone();
         let remote_host = remote_host.clone();
         async move {
@@ -177,13 +179,12 @@ async fn handle(
                 });
                 sender.send_request(request).await.unwrap()
             };
-
+            // log response
             println!(">> {address}");
             println!("{:?} {}", response.version(), response.status().as_str());
             for (header_name, header_value) in response.headers().iter() {
                 println!("{}: {}", header_name, header_value.to_str().unwrap());
             }
-
             Ok::<_, Error>(response)
         }
     });

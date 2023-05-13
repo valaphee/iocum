@@ -40,6 +40,7 @@ struct Arguments {
 
 #[tokio::main]
 async fn main() {
+    // parse arguments
     let Arguments {
         uri,
         remote_uri,
@@ -54,7 +55,7 @@ async fn main() {
     ))
     .await
     .unwrap();
-    // setup tls server config
+    // setup tls acceptor
     let mut tls_server_config = ServerConfig::builder()
         .with_safe_defaults()
         .with_no_client_auth()
@@ -66,7 +67,7 @@ async fn main() {
         tls_server_config.alpn_protocols = vec![b"h2".to_vec()];
     }
     let tls_acceptor = TlsAcceptor::from(Arc::new(tls_server_config));
-    // setup tls client config
+    // setup tls connector
     let mut root_cert_store = RootCertStore::empty();
     root_cert_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(
         |trust_anchor| {
@@ -85,7 +86,7 @@ async fn main() {
         tls_client_config.alpn_protocols = vec![b"h2".to_vec()];
     }
     let tls_connector = TlsConnector::from(Arc::new(tls_client_config));
-    // prepare remote address
+    // parse remote address
     let remote_addr = format!(
         "{}:{}",
         remote_uri.host().unwrap(),
@@ -95,10 +96,10 @@ async fn main() {
     .unwrap()
     .next()
     .unwrap();
-    // for each connection
+    // for each socket
     loop {
         let (socket, address) = listener.accept().await.unwrap();
-        // spawn new task to handle connection
+        // spawn new task to handle socket
         let tls_acceptor = tls_acceptor.clone();
         let tls_connector = tls_connector.clone();
         let remote_host = remote_uri.host().unwrap().to_string();
@@ -125,6 +126,8 @@ async fn handle(
     remote_addr: SocketAddr,
     http2: bool,
 ) {
+    // handle tls and wrap socket
+    let socket = tls_acceptor.accept(socket).await.unwrap();
     let service = service_fn(move |mut request: Request<Incoming>| {
         // log request
         println!("<< {address}");
@@ -150,10 +153,13 @@ async fn handle(
                 .insert(HOST, HeaderValue::from_str(&remote_host).unwrap());
             request
         };
+        // service function
         let tls_connector = tls_connector.clone();
         let remote_host = remote_host.clone();
         async move {
+            // connect
             let remote_socket = TcpStream::connect(&remote_addr).await.unwrap();
+            // handle tls and wrap socket
             let remote_socket = tls_connector
                 .connect(
                     ServerName::try_from(remote_host.as_str()).unwrap(),
@@ -161,7 +167,7 @@ async fn handle(
                 )
                 .await
                 .unwrap();
-
+            // request
             let response = if http2 {
                 let (mut sender, connection) =
                     client::conn::http2::handshake(TokioExecutor, remote_socket)
@@ -188,8 +194,7 @@ async fn handle(
             Ok::<_, Error>(response)
         }
     });
-
-    let socket = tls_acceptor.accept(socket).await.unwrap();
+    // handle http
     if http2 {
         server::conn::http2::Builder::new(TokioExecutor)
             .serve_connection(socket, service)

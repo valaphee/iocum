@@ -24,10 +24,10 @@ use staxmcje::{
 #[derive(Parser, Clone)]
 #[command(about)]
 struct Arguments {
-    /// Addr to bind to
+    /// Address to bind to
     #[arg(long)]
     addr: String,
-    /// Addr to connect to
+    /// Address to connect to
     #[arg(long)]
     remote_addr: Option<String>,
     /// Access token used for creating the session
@@ -40,13 +40,14 @@ struct Arguments {
 
 #[tokio::main]
 async fn main() {
+    // parse arguments
     let arguments = Arguments::parse();
     // bind listener
     let listener = TcpListener::bind(arguments.addr.clone()).await.unwrap();
-    // for each connection
+    // for each socket
     loop {
         let socket = listener.accept().await.unwrap().0;
-        // spawn new task to handle connection
+        // spawn new task to handle socket
         let arguments = arguments.clone();
         tokio::task::spawn(async move {
             handle(socket, arguments).await.unwrap();
@@ -183,6 +184,8 @@ async fn handle(
                     }
                     // enable encryption
                     remote_socket.codec_mut().enable_encryption(&key);
+                    // receive, handle and forward s2c login compression until game profile packet
+                    // is received
                     loop {
                         match next(&mut remote_socket).await?.decode()? {
                             s2c::LoginPacket::LoginCompression {
@@ -219,14 +222,16 @@ async fn handle(
                             packet = next(&mut socket) => {
                                 let packet = packet.unwrap();
                                 if let Ok(packet) = packet.decode::<c2s::GamePacket>() {
-                                    println!("<< {:?}", packet);
+                                    println!("<<");
+                                    println!("{:?}", packet);
                                     encode_and_send(&mut remote_socket, &packet).await;
                                 }
                             }
                             packet = next(&mut remote_socket) => {
                                 let packet = packet.unwrap();
                                 if let Ok(packet) = packet.decode::<s2c::GamePacket>() {
-                                    println!(">> {:?}", packet);
+                                    println!(">>");
+                                    println!("{:?}", packet)
                                     encode_and_send(&mut socket, &packet).await;
                                 }
                             }

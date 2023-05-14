@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs;
 use std::fs::File;
 use iced_x86::{Decoder, DecoderOptions, Encoder, FlowControl, Formatter, Instruction, NasmFormatter, OpKind};
@@ -74,7 +75,7 @@ fn main() -> anyhow::Result<()> {
         );
         let mut section_data = section.pe_data(in_data)?.to_vec();
         if &section.name == b".text\0\0\0" {
-            cfo(&mut Decoder::with_ip(64, section.pe_data(in_data)?, section.virtual_address.get(LittleEndian) as u64, DecoderOptions::NONE), optional_header.address_of_entry_point() as u64, &mut section_data)
+            process(&mut Decoder::with_ip(64, section.pe_data(in_data)?, section.virtual_address.get(LittleEndian) as u64, DecoderOptions::NONE), optional_header.address_of_entry_point() as u64, &mut section_data)
         }
         sections_data.push((range.file_offset, section_data));
     }
@@ -96,9 +97,9 @@ fn main() -> anyhow::Result<()> {
     }
     // encode headers
     writer.write_dos_header_and_stub()?;
-    if let Some(in_rich_header) = rich_header.as_ref() {
+    if let Some(rich_header) = rich_header.as_ref() {
         writer.write_align(4);
-        writer.write(&in_data[in_rich_header.offset..][..in_rich_header.length + 8]);
+        writer.write(&in_data[rich_header.offset..][..rich_header.length + 8]);
     }
     writer.write_nt_headers(object::write::pe::NtHeaders {
         machine: file_header.machine.get(LittleEndian),
@@ -138,45 +139,64 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn cfo(decoder: &mut Decoder, entry: u64, data: &mut [u8]) {
+fn process(decoder: &mut Decoder, entry: u64, data: &mut [u8]) {
     let base = decoder.ip();
-    // go to entry
-    decoder.set_ip(entry);
-    decoder.set_position((entry - base) as usize).unwrap();
-    // decode
-    let mut instruction = Instruction::default();
-    let mut cfo_branch = 0;
-    let mut cfo_branch_target = 0;
-    while decoder.can_decode() {
-        decoder.decode_out(&mut instruction);
-        if cfo_branch_target != 0 {
-            if decoder.ip() >= cfo_branch_target {
-                if (instruction.ip()..decoder.ip()).contains(&cfo_branch_target) {
-                    for i in (cfo_branch - base)..(cfo_branch_target - base) {
-                        data[i as usize] = 0x90;
+    let mut queued_chunks = vec![entry];
+    let mut visited_chunks = HashSet::new();
+    while let Some(chunk) = queued_chunks.pop() {
+        // only check each chunk once
+        if visited_chunks.contains(&chunk) {
+            continue;
+        }
+        visited_chunks.insert(chunk);
+        // go to chunk
+        decoder.set_ip(chunk);
+        decoder.set_position((chunk - base) as usize).unwrap();
+        // search for potential opaque branches
+        let mut instruction = Instruction::default();
+        let mut branch_condition_instruction = Instruction::default();
+        let mut branch_instruction = Instruction::default();
+        while decoder.can_decode() {
+            decoder.decode_out(&mut instruction);
+            if branch_instruction.len() != 0 {
+                if decoder.ip() >= branch_instruction.near_branch_target() {
+                    if (instruction.ip()..decoder.ip()).contains(&branch_instruction.near_branch_target()) {
+                        // (always taken)
+                        /*for i in (opaque_instruction.ip() - base)..(opaque_instruction.near_branch_target() - base) {
+                            data[i as usize] = 0x90;
+                        }
+                        queued_chunks.push(opaque_instruction.near_branch_target());*/
+                        // (never taken)
+                        /*for i in (opaque_instruction.ip() - base)..(opaque_instruction.next_ip() - base) {
+                            data[i as usize] = 0x90;
+                        }
+                        queued_chunks.push(opaque_instruction.next_ip());*/
+                    } else {
+                        queued_chunks.push(branch_instruction.next_ip());
+                        queued_chunks.push(branch_instruction.near_branch_target());
                     }
-                    decoder.set_ip(cfo_branch_target as u64);
-                    decoder.set_position((cfo_branch_target - base) as usize).unwrap();
-                    cfo_branch = 0;
-                    cfo_branch_target = 0;
-                } else {
-                    decoder.set_ip(cfo_branch as u64);
-                    decoder.set_position((cfo_branch - base) as usize).unwrap();
-                    cfo_branch = 0;
-                    cfo_branch_target = 0;
+                    break;
                 }
-            }
-        } else {
-            match instruction.flow_control() {
-                FlowControl::UnconditionalBranch => if instruction.op0_kind() == OpKind::NearBranch64 && instruction.len() == 2 {
-                    cfo_branch = decoder.ip();
-                    cfo_branch_target = instruction.near_branch_target();
+            } else {
+                match instruction.flow_control() {
+                    FlowControl::Next => {
+                        //instruction.mnemonic();
+                    }
+                    FlowControl::UnconditionalBranch | FlowControl::ConditionalBranch => if instruction.op0_kind() == OpKind::NearBranch64 {
+                        if instruction.len() == 2 {
+                            branch_instruction = instruction;
+                        } else {
+                            queued_chunks.push(instruction.near_branch_target());
+                        }
+                    }
+                    FlowControl::Return => {
+                        break;
+                    }
+                    FlowControl::Call => if instruction.op0_kind() == OpKind::NearBranch64 {
+                        queued_chunks.push(instruction.near_branch_target());
+                    }
+                    _ => {}
                 }
-                FlowControl::ConditionalBranch => if instruction.op0_kind() == OpKind::NearBranch64 && instruction.len() == 2 {
-                    cfo_branch = decoder.ip();
-                    cfo_branch_target = instruction.near_branch_target();
-                }
-                _ => {}
             }
         }
     }

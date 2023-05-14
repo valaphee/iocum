@@ -1,22 +1,29 @@
-use std::collections::HashSet;
-use std::fs;
-use std::fs::File;
-use iced_x86::{Decoder, DecoderOptions, Encoder, FlowControl, Formatter, Instruction, NasmFormatter, OpKind};
-use iced_x86::CC_e::e;
+use std::{collections::HashSet, fs, fs::File};
 
-use object::read::coff::CoffHeader;
-use object::{LittleEndian, pe};
-use object::read::pe::{ImageNtHeaders, ImageOptionalHeader};
+use iced_x86::{
+    CC_e::e, Decoder, DecoderOptions, Encoder, FlowControl, Formatter, Instruction, NasmFormatter,
+    OpKind,
+};
+use object::{
+    pe,
+    read::{
+        coff::CoffHeader,
+        pe::{ImageNtHeaders, ImageOptionalHeader},
+    },
+    LittleEndian,
+};
 
 fn main() -> anyhow::Result<()> {
     // read file
-    let in_data = fs::read("C:\\Program Files (x86)\\Overwatch\\_retail_\\Overwatch.exe.tmp").unwrap();
+    let in_data =
+        fs::read("C:\\Program Files (x86)\\Overwatch\\_retail_\\Overwatch.exe.tmp").unwrap();
     let in_data = in_data.as_slice();
     // decode headers
     let dos_header = pe::ImageDosHeader::parse(in_data)?;
     let mut nt_header_offset = dos_header.nt_headers_offset().into();
     let rich_header = object::read::pe::RichHeaderInfo::parse(in_data, nt_header_offset);
-    let (nt_headers, data_directories) = pe::ImageNtHeaders64::parse(in_data, &mut nt_header_offset)?;
+    let (nt_headers, data_directories) =
+        pe::ImageNtHeaders64::parse(in_data, &mut nt_header_offset)?;
     let file_header = nt_headers.file_header();
     let optional_header = nt_headers.optional_header();
     // create writer
@@ -47,7 +54,11 @@ fn main() -> anyhow::Result<()> {
         {
             continue;
         }
-        writer.set_data_directory(i, dir.virtual_address.get(LittleEndian), dir.size.get(LittleEndian));
+        writer.set_data_directory(
+            i,
+            dir.virtual_address.get(LittleEndian),
+            dir.size.get(LittleEndian),
+        );
     }
     // reserve section headers
     let sections = file_header.sections(in_data, nt_header_offset)?;
@@ -75,7 +86,16 @@ fn main() -> anyhow::Result<()> {
         );
         let mut section_data = section.pe_data(in_data)?.to_vec();
         if &section.name == b".text\0\0\0" {
-            process(&mut Decoder::with_ip(64, section.pe_data(in_data)?, section.virtual_address.get(LittleEndian) as u64, DecoderOptions::NONE), optional_header.address_of_entry_point() as u64, &mut section_data)
+            process(
+                &mut Decoder::with_ip(
+                    64,
+                    section.pe_data(in_data)?,
+                    section.virtual_address.get(LittleEndian) as u64,
+                    DecoderOptions::NONE,
+                ),
+                optional_header.address_of_entry_point() as u64,
+                &mut section_data,
+            )
         }
         sections_data.push((range.file_offset, section_data));
     }
@@ -134,7 +154,10 @@ fn main() -> anyhow::Result<()> {
         writer.write_certificate_table(&in_data[address as usize..][..size as usize]);
     }
     // write to file
-    fs::write("C:\\Program Files (x86)\\Overwatch\\_retail_\\Overwatch.exe", out_data)?;
+    fs::write(
+        "C:\\Program Files (x86)\\Overwatch\\_retail_\\Overwatch.exe",
+        out_data,
+    )?;
 
     Ok(())
 }
@@ -160,7 +183,9 @@ fn process(decoder: &mut Decoder, entry: u64, data: &mut [u8]) {
             decoder.decode_out(&mut instruction);
             if branch_instruction.len() != 0 {
                 if decoder.ip() >= branch_instruction.near_branch_target() {
-                    if (instruction.ip()..decoder.ip()).contains(&branch_instruction.near_branch_target()) {
+                    if (instruction.ip()..decoder.ip())
+                        .contains(&branch_instruction.near_branch_target())
+                    {
                         // (always taken)
                         /*for i in (opaque_instruction.ip() - base)..(opaque_instruction.near_branch_target() - base) {
                             data[i as usize] = 0x90;
@@ -182,18 +207,22 @@ fn process(decoder: &mut Decoder, entry: u64, data: &mut [u8]) {
                     FlowControl::Next => {
                         //instruction.mnemonic();
                     }
-                    FlowControl::UnconditionalBranch | FlowControl::ConditionalBranch => if instruction.op0_kind() == OpKind::NearBranch64 {
-                        if instruction.len() == 2 {
-                            branch_instruction = instruction;
-                        } else {
-                            queued_chunks.push(instruction.near_branch_target());
+                    FlowControl::UnconditionalBranch | FlowControl::ConditionalBranch => {
+                        if instruction.op0_kind() == OpKind::NearBranch64 {
+                            if instruction.len() == 2 {
+                                branch_instruction = instruction;
+                            } else {
+                                queued_chunks.push(instruction.near_branch_target());
+                            }
                         }
                     }
                     FlowControl::Return => {
                         break;
                     }
-                    FlowControl::Call => if instruction.op0_kind() == OpKind::NearBranch64 {
-                        queued_chunks.push(instruction.near_branch_target());
+                    FlowControl::Call => {
+                        if instruction.op0_kind() == OpKind::NearBranch64 {
+                            queued_chunks.push(instruction.near_branch_target());
+                        }
                     }
                     _ => {}
                 }

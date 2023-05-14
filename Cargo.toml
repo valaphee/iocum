@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "bgs",
+    "asm",
     "http",
     "mcje",
     "mcje_derive",

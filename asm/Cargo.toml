@@ -1,0 +1,14 @@
+[package]
+name = "staxasm"
+version = "0.0.0"
+edition = "2021"
+repository = "https://github.com/valaphee/stax.git"
+
+[dev-dependencies]
+anyhow = "1.0.71"
+iced-x86 = "1.18.0"
+object = { version = "0.31.0", features = ["all"] }
+
+[[example]]
+name = "asm_cfo"
+path = "examples/cfo.rs"

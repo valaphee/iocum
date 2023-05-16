@@ -16,7 +16,7 @@ impl LocationView {
 
 impl AppView for LocationView {
     fn title(&self) -> String {
-        "Entries".into()
+        "Locations".into()
     }
 
     fn ui(&mut self, state: &mut AppState, ui: &mut Ui) {
@@ -45,14 +45,15 @@ impl AppView for LocationView {
                         if ui
                             .add(
                                 Label::new(
-                                    RichText::from(format!("{:016X}", location.va)).monospace(),
+                                    RichText::from(format!("{:016X}", location.address))
+                                        .monospace(),
                                 )
                                 .wrap(false)
                                 .sense(Sense::click()),
                             )
                             .clicked()
                         {
-                            state.go_to_va = Some(location.va)
+                            state.go_to_address = Some(location.address)
                         }
                     });
                     row.col(|ui| {
@@ -77,14 +78,18 @@ impl AppView for LocationView {
 }
 
 pub struct Location {
-    va: u64,
+    address: u64,
     type_: LocationType,
     name: String,
 }
 
 impl Location {
-    pub fn new(va: u64, type_: LocationType, name: String) -> Self {
-        Self { va, type_, name }
+    pub fn new(address: u64, type_: LocationType, name: String) -> Self {
+        Self {
+            address,
+            type_,
+            name,
+        }
     }
 }
 

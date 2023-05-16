@@ -3,7 +3,6 @@
 use byteorder::{ReadBytesExt, LE};
 use eframe::egui::{Context, Ui, WidgetText};
 use egui_dock::{DockArea, Node, Tree};
-use iced_x86::{Decoder, DecoderOptions};
 use object::{
     coff::CoffHeader,
     pe,
@@ -33,8 +32,6 @@ pub fn main() -> eframe::Result<()> {
 struct App {
     state: AppState,
     tree: Tree<Box<dyn AppView>>,
-
-    data: Vec<u8>,
 }
 
 impl App {
@@ -47,9 +44,11 @@ impl App {
         };
 
         let mut self_ = Self {
-            state: Default::default(),
+            state: AppState {
+                data,
+                go_to_address: None,
+            },
             tree: Default::default(),
-            data,
         };
         self_.open_entry_view();
         self_
@@ -85,7 +84,7 @@ impl App {
     }
 
     fn open_entry_view(&mut self) {
-        let data = self.data.as_slice();
+        let data = self.state.data.as_slice();
         let dos_header = ImageDosHeader::parse(data).unwrap();
         let mut nt_header_offset = dos_header.nt_headers_offset().into();
         let (nt_headers, data_directories) =
@@ -141,8 +140,8 @@ impl App {
         self.open_view(Box::new(LocationView::new(entries)));
     }
 
-    fn go_to_va(&mut self, va: u64) {
-        let data = self.data.as_slice();
+    fn go_to_va(&mut self, address: u64) {
+        let data = self.state.data.as_slice();
         let dos_header = ImageDosHeader::parse(data).unwrap();
         let mut nt_header_offset = dos_header.nt_headers_offset().into();
         let (nt_headers, _data_directories) =
@@ -155,41 +154,35 @@ impl App {
         }
         let optional_header = nt_headers.optional_header();
         let sections = file_header.sections(data, nt_header_offset).unwrap();
-        let rva = (va - optional_header.image_base()) as u32;
-        let Some(section) = sections.section_containing(rva) else {
+        let relative_address = (address - optional_header.image_base()) as u32;
+        let Some(section) = sections.section_containing(relative_address) else {
             return;
         };
-        let Some(section_data) = section.pe_data_at(data, rva) else {
+        let Some((section_data_offset, section_data_length)) = section.pe_file_range_at(relative_address) else {
             return;
         };
         let section_characteristics = section.characteristics.get(LittleEndian);
         if section_characteristics & (pe::IMAGE_SCN_CNT_CODE | pe::IMAGE_SCN_MEM_EXECUTE) != 0 {
             self.open_view(Box::new(AssemblyView::new(
-                Decoder::with_ip(
-                    if file_header.machine.get(LittleEndian) == pe::IMAGE_FILE_MACHINE_I386 {
-                        32
-                    } else {
-                        64
-                    },
-                    section_data,
-                    va,
-                    DecoderOptions::NONE,
-                )
-                .iter()
-                .take(50)
-                .collect(),
+                address,
+                section_data_offset as usize,
+                section_data_length as usize,
             )));
         } else {
-            self.open_view(Box::new(RawView::new(va, section_data.to_vec())));
+            self.open_view(Box::new(RawView::new(
+                address,
+                section_data_offset as usize,
+                section_data_length as usize,
+            )));
         }
     }
 }
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
-        if let Some(go_to_va) = &self.state.go_to_va {
+        if let Some(go_to_va) = &self.state.go_to_address {
             self.go_to_va(*go_to_va);
-            self.state.go_to_va = None;
+            self.state.go_to_address = None;
         }
         DockArea::new(&mut self.tree).show(
             ctx,
@@ -222,7 +215,8 @@ trait AppView {
     fn ui(&mut self, state: &mut AppState, ui: &mut Ui);
 }
 
-#[derive(Default)]
 struct AppState {
-    go_to_va: Option<u64>,
+    data: Vec<u8>,
+
+    go_to_address: Option<u64>,
 }

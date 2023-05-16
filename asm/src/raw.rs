@@ -1,26 +1,32 @@
 use eframe::egui::{Label, RichText, TextStyle, Ui};
 use egui_extras::{Column, TableBuilder};
-use iced_x86::OpCodeOperandKind::al;
 
 use crate::{AppState, AppView};
 
 pub struct RawView {
-    va: u64,
-    data: Vec<u8>,
+    address: u64,
+    data_offset: usize,
+    data_length: usize,
 }
 
 impl RawView {
-    pub fn new(va: u64, data: Vec<u8>) -> Self {
-        Self { va, data }
+    pub fn new(address: u64, data_offset: usize, data_length: usize) -> Self {
+        Self {
+            address,
+            data_offset,
+            data_length,
+        }
     }
 }
 
 impl AppView for RawView {
     fn title(&self) -> String {
-        format!("Raw ({:016X})", self.va)
+        format!("Raw ({:016X})", self.address)
     }
 
-    fn ui(&mut self, _state: &mut AppState, ui: &mut Ui) {
+    fn ui(&mut self, state: &mut AppState, ui: &mut Ui) {
+        let data =
+            &state.data[self.data_offset as usize..(self.data_offset + self.data_length) as usize];
         let row_height = ui.text_style_height(&TextStyle::Monospace);
         TableBuilder::new(ui)
             .min_scrolled_height(0.0)
@@ -35,23 +41,26 @@ impl AppView for RawView {
                 row.col(|_ui| {});
             })
             .body(|body| {
-                let align = self.va as usize / 16;
-                let align_offset = self.va as usize % 16;
+                let aligned_address = self.address as usize / 16;
+                let aligned_address_offset = self.address as usize % 16;
                 body.rows(
                     row_height,
-                    (self.data.len() + align_offset).div_ceil(16),
+                    (data.len() + aligned_address_offset).div_ceil(16),
                     |index, mut row| {
-                        let data = &self.data[if index == 0 {
+                        let data = &data[if index == 0 {
                             0
                         } else {
-                            index * 16 - align_offset
+                            index * 16 - aligned_address_offset
                         }
-                            ..(index * 16 + 16 - align_offset).min(self.data.len())];
+                            ..(index * 16 + 16 - aligned_address_offset).min(data.len())];
                         row.col(|ui| {
                             ui.add(
                                 Label::new(
-                                    RichText::from(format!("{:016X}", (index + align) * 16))
-                                        .monospace(),
+                                    RichText::from(format!(
+                                        "{:016X}",
+                                        (index + aligned_address) * 16
+                                    ))
+                                    .monospace(),
                                 )
                                 .wrap(false),
                             );
@@ -63,7 +72,11 @@ impl AppView for RawView {
                                 .collect::<Vec<_>>()
                                 .join(" ");
                             if index == 0 {
-                                text = format!("{}{}", "   ".repeat(align_offset as usize), text);
+                                text = format!(
+                                    "{}{}",
+                                    "   ".repeat(aligned_address_offset as usize),
+                                    text
+                                );
                             }
                             ui.add(Label::new(RichText::from(text).monospace()).wrap(false));
                         });
@@ -79,7 +92,11 @@ impl AppView for RawView {
                                 })
                                 .collect::<String>();
                             if index == 0 {
-                                text = format!("{}{}", " ".repeat(align_offset as usize), text);
+                                text = format!(
+                                    "{}{}",
+                                    " ".repeat(aligned_address_offset as usize),
+                                    text
+                                );
                             }
                             ui.add(Label::new(RichText::from(text).monospace()).wrap(false));
                         });

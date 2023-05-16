@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "asm",
     "bgs",
     "http",
     "mcje",
@@ -10,9 +9,3 @@ members = [
     "tls",
 ]
 resolver = "2"
-
-[profile.release]
-strip = true
-lto = true
-panic = "abort"
-codegen-units = 1

@@ -97,7 +97,7 @@ impl App {
         if optional_header.address_of_entry_point() != 0 {
             entries.push(Location::new(
                 optional_header.address_of_entry_point() as u64 + optional_header.image_base(),
-                LocationType::Main,
+                LocationType::EntryPoint,
                 "".to_string(),
             ));
         }

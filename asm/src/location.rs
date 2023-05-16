@@ -59,7 +59,7 @@ impl AppView for LocationView {
                         ui.add(
                             Label::new(
                                 RichText::from(match location.type_ {
-                                    LocationType::Main => "Main",
+                                    LocationType::EntryPoint => "Entry point",
                                     LocationType::Export => "Export",
                                     LocationType::TlsCallback => "TLS callback",
                                 })
@@ -89,7 +89,7 @@ impl Location {
 }
 
 pub enum LocationType {
-    Main,
+    EntryPoint,
     Export,
     TlsCallback,
 }

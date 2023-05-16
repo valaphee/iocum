@@ -1,3 +1,5 @@
+#![feature(int_roundings)]
+
 use byteorder::{ReadBytesExt, LE};
 use eframe::egui::{Context, Ui, WidgetText};
 use egui_dock::{DockArea, Node, Tree};
@@ -6,17 +8,19 @@ use object::{
     coff::CoffHeader,
     pe,
     pe::{ImageDosHeader, ImageNtHeaders64, ImageTlsDirectory64},
-    read::pe::{ImageNtHeaders, ImageOptionalHeader},
+    read::pe::{ExportTarget, ImageNtHeaders, ImageOptionalHeader},
     LittleEndian, ReadRef,
 };
 
 use crate::{
     assembly::AssemblyView,
-    entry::{Entry, EntryType, EntryView},
+    location::{Location, LocationType, LocationView},
+    raw::RawView,
 };
 
 mod assembly;
-mod entry;
+mod location;
+mod raw;
 
 pub fn main() -> eframe::Result<()> {
     eframe::run_native(
@@ -91,18 +95,32 @@ impl App {
         let sections = file_header.sections(data, nt_header_offset).unwrap();
         let mut entries = vec![];
         if optional_header.address_of_entry_point() != 0 {
-            entries.push(Entry::new(
+            entries.push(Location::new(
                 optional_header.address_of_entry_point() as u64 + optional_header.image_base(),
-                EntryType::Main,
+                LocationType::Main,
                 "".to_string(),
             ));
         }
-        if let Some(directory_location) = data_directories.get(pe::IMAGE_DIRECTORY_ENTRY_TLS) {
-            if let Ok(directory_data) = directory_location.data(data, &sections) {
-                if let Ok(directory) = directory_data.read_at::<ImageTlsDirectory64>(0) {
+        if let Some(export_table) = data_directories.export_table(data, &sections).unwrap() {
+            for export in export_table.exports().unwrap() {
+                match export.target {
+                    ExportTarget::Address(rva) => {
+                        entries.push(Location::new(
+                            rva as u64 + optional_header.image_base(),
+                            LocationType::Export,
+                            String::from_utf8_lossy(export.name.unwrap()).to_string(),
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+        }
+        if let Some(directory) = data_directories.get(pe::IMAGE_DIRECTORY_ENTRY_TLS) {
+            if let Ok(directory_data) = directory.data(data, &sections) {
+                if let Ok(tls_directory) = directory_data.read_at::<ImageTlsDirectory64>(0) {
                     if let Some(mut callback_data) = sections.pe_data_at(
                         data,
-                        (directory.address_of_call_backs.get(LittleEndian)
+                        (tls_directory.address_of_call_backs.get(LittleEndian)
                             - optional_header.image_base()) as u32,
                     ) {
                         loop {
@@ -110,20 +128,20 @@ impl App {
                             if callback == 0 {
                                 break;
                             }
-                            entries.push(Entry::new(
+                            entries.push(Location::new(
                                 callback,
-                                EntryType::TlsCallback,
+                                LocationType::TlsCallback,
                                 "".to_string(),
-                            ))
+                            ));
                         }
                     }
                 }
             }
         }
-        self.open_view(Box::new(EntryView::new(entries)));
+        self.open_view(Box::new(LocationView::new(entries)));
     }
 
-    fn open_assembly_view(&mut self, va: u64) {
+    fn go_to_va(&mut self, va: u64) {
         let data = self.data.as_slice();
         let dos_header = ImageDosHeader::parse(data).unwrap();
         let mut nt_header_offset = dos_header.nt_headers_offset().into();
@@ -137,9 +155,15 @@ impl App {
         }
         let optional_header = nt_headers.optional_header();
         let sections = file_header.sections(data, nt_header_offset).unwrap();
-        if let Some(instruction_data) =
-            sections.pe_data_at(data, (va - optional_header.image_base()) as u32)
-        {
+        let rva = (va - optional_header.image_base()) as u32;
+        let Some(section) = sections.section_containing(rva) else {
+            return;
+        };
+        let Some(section_data) = section.pe_data_at(data, rva) else {
+            return;
+        };
+        let section_characteristics = section.characteristics.get(LittleEndian);
+        if section_characteristics & (pe::IMAGE_SCN_CNT_CODE | pe::IMAGE_SCN_MEM_EXECUTE) != 0 {
             self.open_view(Box::new(AssemblyView::new(
                 Decoder::with_ip(
                     if file_header.machine.get(LittleEndian) == pe::IMAGE_FILE_MACHINE_I386 {
@@ -147,7 +171,7 @@ impl App {
                     } else {
                         64
                     },
-                    instruction_data,
+                    section_data,
                     va,
                     DecoderOptions::NONE,
                 )
@@ -155,15 +179,17 @@ impl App {
                 .take(50)
                 .collect(),
             )));
+        } else {
+            self.open_view(Box::new(RawView::new(va, section_data.to_vec())));
         }
     }
 }
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
-        if let Some(go_to_assembly_va) = &self.state.go_to_assembly_va {
-            self.open_assembly_view(*go_to_assembly_va);
-            self.state.go_to_assembly_va = None;
+        if let Some(go_to_va) = &self.state.go_to_va {
+            self.go_to_va(*go_to_va);
+            self.state.go_to_va = None;
         }
         DockArea::new(&mut self.tree).show(
             ctx,
@@ -198,5 +224,5 @@ trait AppView {
 
 #[derive(Default)]
 struct AppState {
-    go_to_assembly_va: Option<u64>,
+    go_to_va: Option<u64>,
 }

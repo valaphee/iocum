@@ -4,17 +4,17 @@ use egui_extras::{Column, TableBuilder};
 
 use crate::{AppState, AppView};
 
-pub struct EntryView {
-    entries: Vec<Entry>,
+pub struct LocationView {
+    locations: Vec<Location>,
 }
 
-impl EntryView {
-    pub fn new(entries: Vec<Entry>) -> Self {
-        Self { entries }
+impl LocationView {
+    pub fn new(locations: Vec<Location>) -> Self {
+        Self { locations }
     }
 }
 
-impl AppView for EntryView {
+impl AppView for LocationView {
     fn title(&self) -> String {
         "Entries".into()
     }
@@ -25,12 +25,11 @@ impl AppView for EntryView {
             .striped(true)
             .min_scrolled_height(0.0)
             .max_scroll_height(f32::INFINITY)
-            .column(Column::auto().resizable(true))
-            .column(Column::auto().resizable(true))
+            .columns(Column::auto().resizable(true), 2)
             .column(Column::remainder())
             .header(row_height, |mut row| {
                 row.col(|ui| {
-                    ui.monospace("VA");
+                    ui.monospace("Address");
                 });
                 row.col(|ui| {
                     ui.monospace("Type");
@@ -40,8 +39,8 @@ impl AppView for EntryView {
                 });
             })
             .body(|body| {
-                body.rows(row_height, self.entries.len(), |index, mut row| {
-                    let location = &self.entries[index];
+                body.rows(row_height, self.locations.len(), |index, mut row| {
+                    let location = &self.locations[index];
                     row.col(|ui| {
                         if ui
                             .add(
@@ -53,16 +52,16 @@ impl AppView for EntryView {
                             )
                             .clicked()
                         {
-                            state.go_to_assembly_va = Some(location.va)
+                            state.go_to_va = Some(location.va)
                         }
                     });
                     row.col(|ui| {
                         ui.add(
                             Label::new(
                                 RichText::from(match location.type_ {
-                                    EntryType::Main => "Main",
-                                    EntryType::Export => "Export",
-                                    EntryType::TlsCallback => "TLS callback",
+                                    LocationType::Main => "Main",
+                                    LocationType::Export => "Export",
+                                    LocationType::TlsCallback => "TLS callback",
                                 })
                                 .monospace(),
                             )
@@ -77,19 +76,19 @@ impl AppView for EntryView {
     }
 }
 
-pub struct Entry {
+pub struct Location {
     va: u64,
-    type_: EntryType,
+    type_: LocationType,
     name: String,
 }
 
-impl Entry {
-    pub fn new(va: u64, type_: EntryType, name: String) -> Self {
+impl Location {
+    pub fn new(va: u64, type_: LocationType, name: String) -> Self {
         Self { va, type_, name }
     }
 }
 
-pub enum EntryType {
+pub enum LocationType {
     Main,
     Export,
     TlsCallback,

@@ -62,7 +62,7 @@ impl AppView for AssemblyView {
                                             )
                                             .clicked()
                                         {
-                                            state.go_to_assembly_va = Some(va)
+                                            state.go_to_va = Some(va)
                                         }
                                     }
                                     _ => {

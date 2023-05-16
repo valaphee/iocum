@@ -1,20 +1,20 @@
-use eframe::egui::{Align, Color32, Label, Layout, RichText, TextStyle, Ui, Vec2};
+use eframe::egui::{Align, Color32, Label, Layout, RichText, Sense, TextStyle, Ui, Vec2};
 use egui_extras::{Column, TableBuilder};
 use iced_x86::{Formatter, FormatterTextKind, Instruction, NasmFormatter};
 
 use crate::{AppState, AppView};
 
 pub struct AssemblyView {
-    instructions: Vec<Instruction>,
-
     formatter: NasmFormatter,
+
+    instructions: Vec<Instruction>,
 }
 
 impl AssemblyView {
     pub fn new(instructions: Vec<Instruction>) -> Self {
         Self {
-            instructions,
             formatter: Default::default(),
+            instructions,
         }
     }
 }
@@ -24,7 +24,7 @@ impl AppView for AssemblyView {
         format!("Assembly ({:016X})", self.instructions[0].ip()).into()
     }
 
-    fn ui(&mut self, _state: &mut AppState, ui: &mut Ui) {
+    fn ui(&mut self, state: &mut AppState, ui: &mut Ui) {
         let row_height = ui.text_style_height(&TextStyle::Monospace);
         TableBuilder::new(ui)
             .min_scrolled_height(0.0)
@@ -49,33 +49,50 @@ impl AppView for AssemblyView {
 
                             ui.spacing_mut().item_spacing = Vec2::ZERO;
                             for (text, kind) in output.0 {
-                                ui.add(
-                                    Label::new(
-                                        RichText::from(text)
-                                            .color(match kind {
-                                                FormatterTextKind::Directive
-                                                | FormatterTextKind::Keyword => {
-                                                    Color32::LIGHT_YELLOW
-                                                }
-                                                FormatterTextKind::Prefix
-                                                | FormatterTextKind::Mnemonic => Color32::LIGHT_RED,
-                                                FormatterTextKind::Number => Color32::LIGHT_BLUE,
-                                                _ => Color32::WHITE,
-                                            })
-                                            .monospace(),
-                                    )
-                                    .wrap(false),
-                                );
+                                match kind {
+                                    FormatterTextKind::LabelAddress
+                                    | FormatterTextKind::FunctionAddress => {
+                                        let va = u64::from_str_radix(&text[..text.len() - 1], 16)
+                                            .unwrap();
+                                        if ui
+                                            .add(
+                                                Label::new(RichText::from(text).monospace())
+                                                    .wrap(false)
+                                                    .sense(Sense::click()),
+                                            )
+                                            .clicked()
+                                        {
+                                            state.go_to_assembly_va = Some(va)
+                                        }
+                                    }
+                                    _ => {
+                                        ui.add(
+                                            Label::new(
+                                                RichText::from(text)
+                                                    .color(match kind {
+                                                        FormatterTextKind::Mnemonic => {
+                                                            Color32::LIGHT_RED
+                                                        }
+                                                        FormatterTextKind::Number => {
+                                                            Color32::LIGHT_GREEN
+                                                        }
+                                                        FormatterTextKind::Register => {
+                                                            Color32::LIGHT_BLUE
+                                                        }
+                                                        _ => Color32::WHITE,
+                                                    })
+                                                    .monospace(),
+                                            )
+                                            .wrap(false),
+                                        );
+                                    }
+                                }
                             }
                         });
                     });
                 });
             });
     }
-}
-
-pub struct AssemblySelection {
-    pub va: u64,
 }
 
 struct FormatterOutput(Vec<(String, FormatterTextKind)>);

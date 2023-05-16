@@ -2,21 +2,21 @@ use eframe::egui::{Label, RichText, TextStyle, Ui};
 use egui_dock::egui::Sense;
 use egui_extras::{Column, TableBuilder};
 
-use crate::{assembly::AssemblySelection, AppState, AppView};
+use crate::{AppState, AppView};
 
-pub struct LocationView {
-    locations: Vec<Location>,
+pub struct EntryView {
+    entries: Vec<Entry>,
 }
 
-impl LocationView {
-    pub fn new(locations: Vec<Location>) -> Self {
-        Self { locations }
+impl EntryView {
+    pub fn new(entries: Vec<Entry>) -> Self {
+        Self { entries }
     }
 }
 
-impl AppView for LocationView {
+impl AppView for EntryView {
     fn title(&self) -> String {
-        "Location".into()
+        "Entries".into()
     }
 
     fn ui(&mut self, state: &mut AppState, ui: &mut Ui) {
@@ -40,8 +40,8 @@ impl AppView for LocationView {
                 });
             })
             .body(|body| {
-                body.rows(row_height, self.locations.len(), |index, mut row| {
-                    let location = &self.locations[index];
+                body.rows(row_height, self.entries.len(), |index, mut row| {
+                    let location = &self.entries[index];
                     row.col(|ui| {
                         if ui
                             .add(
@@ -53,16 +53,16 @@ impl AppView for LocationView {
                             )
                             .clicked()
                         {
-                            state.selection = Some(AssemblySelection { va: location.va })
+                            state.go_to_assembly_va = Some(location.va)
                         }
                     });
                     row.col(|ui| {
                         ui.add(
                             Label::new(
                                 RichText::from(match location.type_ {
-                                    LocationType::TlsCallback => "TLS callback",
-                                    LocationType::EntryPoint => "Entry point",
-                                    LocationType::Export => "Export",
+                                    EntryType::Main => "Main",
+                                    EntryType::Export => "Export",
+                                    EntryType::TlsCallback => "TLS callback",
                                 })
                                 .monospace(),
                             )
@@ -77,14 +77,20 @@ impl AppView for LocationView {
     }
 }
 
-pub struct Location {
-    pub va: u64,
-    pub type_: LocationType,
-    pub name: String,
+pub struct Entry {
+    va: u64,
+    type_: EntryType,
+    name: String,
 }
 
-pub enum LocationType {
-    TlsCallback,
-    EntryPoint,
+impl Entry {
+    pub fn new(va: u64, type_: EntryType, name: String) -> Self {
+        Self { va, type_, name }
+    }
+}
+
+pub enum EntryType {
+    Main,
     Export,
+    TlsCallback,
 }

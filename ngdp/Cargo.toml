@@ -7,12 +7,10 @@ license = "Apache-2.0"
 repository = "https://github.com/valaphee/iocum.git"
 
 [dependencies]
-anyhow = "1.0.71"
 byteorder = "1.4.3"
 fasthash = "0.4.0"
 flate2 = "1.0.26"
 hex = { version = "0.4.3", features = ["serde"] }
 md-5 = "0.10.5"
 salsa20 = "0.10.2"
-serde = { version = "1.0.164", features = ["derive"] }
 thiserror = "1.0.40"

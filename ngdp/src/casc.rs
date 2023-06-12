@@ -44,7 +44,6 @@ impl Storage {
     }
 }
 
-#[derive(Debug)]
 struct SharedMemory {
     path: String,
     versions: Vec<u32>,
@@ -105,7 +104,6 @@ impl SharedMemory {
     }
 }
 
-#[derive(Debug)]
 struct Index {
     bucket: u16,
     entry_length_size: u8,
@@ -137,7 +135,7 @@ impl Index {
         input.read_exact(&mut [0; 0x8])?;
 
         let mut entries_data = vec![0; input.read_u32::<LittleEndian>()? as usize];
-        let entries_hash = input.read_u32::<LittleEndian>()?;
+        let _entries_hash = input.read_u32::<LittleEndian>()?;
         input.read_exact(&mut entries_data)?;
         /*if entries_hash != lookup3::hash32(&entries_data) {
             return Err(CascError::IntegrityError);
@@ -168,7 +166,6 @@ impl Index {
     }
 }
 
-#[derive(Debug)]
 struct Entry {
     pub key: Vec<u8>,
     pub file: u64,

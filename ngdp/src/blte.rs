@@ -35,12 +35,12 @@ pub fn decode<'a, R: Read>(
     for chunk in chunks.iter() {
         let mut encoded = vec![0; chunk.e_size as usize];
         input.read_exact(&mut encoded)?;
+        let mut encoded = encoded.as_slice();
         let mut md5 = Md5::new();
-        md5.update(&encoded);
+        md5.update(encoded);
         if chunk.md5 != md5.finalize().as_slice() {
             return Err(Error::IntegrityError);
         }
-        let mut encoded = encoded.as_slice();
         let encoding_mode = encoded.read_u8()?;
         match encoding_mode {
             b'N' => {
@@ -56,7 +56,6 @@ pub fn decode<'a, R: Read>(
                 let Some(key) = key_lookup(&key_name) else {
                     return Err(Error::KeyNotFound(hex::encode(key_name)));
                 };
-
                 let iv_size = encoded.read_u8()?;
                 let mut iv = vec![0; iv_size as usize];
                 encoded.read_exact(&mut iv)?;
@@ -81,7 +80,6 @@ pub fn decode<'a, R: Read>(
     Ok(content)
 }
 
-#[derive(Debug)]
 struct Chunk {
     e_size: u32,
     c_size: u32,
@@ -90,14 +88,14 @@ struct Chunk {
 
 impl Chunk {
     fn decode<R: Read>(input: &mut R) -> Result<Self> {
-        let e_size = input.read_u32::<BigEndian>()?;
-        let c_size = input.read_u32::<BigEndian>()?;
-        let mut md5 = [0; 16];
-        input.read_exact(&mut md5)?;
         Ok(Self {
-            e_size,
-            c_size,
-            md5,
+            e_size: input.read_u32::<BigEndian>()?,
+            c_size: input.read_u32::<BigEndian>()?,
+            md5: {
+                let mut md5 = [0; 16];
+                input.read_exact(&mut md5)?;
+                md5
+            },
         })
     }
 }

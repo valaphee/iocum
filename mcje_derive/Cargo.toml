@@ -1,16 +1,16 @@
 [package]
-name = "staxmcje_derive"
+name = "iocum_mcje_derive"
 version = "1.19.4-0"
 edition = "2021"
 authors = ["Valaphee <iam@valaphee.com>"]
 license = "Apache-2.0"
-repository = "https://github.com/valaphee/stax.git"
-description = "Derive macros used by staxmcje"
+repository = "https://github.com/valaphee/iocum.git"
+description = "Derive macros used by iocum_mcje"
 
 [lib]
 proc-macro = true
 
 [dependencies]
-proc-macro2 = "1.0.56"
-quote = "1.0.26"
-syn = "2.0.15"
+proc-macro2 = "1.0.60"
+quote = "1.0.28"
+syn = "2.0.18"

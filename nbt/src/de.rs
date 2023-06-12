@@ -25,21 +25,20 @@ struct Deserializer<'de> {
 
 impl<'de> Deserializer<'de> {
     fn from_slice(input: &'de [u8]) -> Result<Self> {
-        let mut self_ = Self {
+        let mut _self = Self {
             data: input,
-
             name: false,
             current_type: TagType::default(),
         };
         // read first named tag header
-        let type_ = TagType::try_from(self_.data.read_i8()?).unwrap();
+        let type_ = TagType::try_from(_self.data.read_i8()?).unwrap();
         if type_ != TagType::End {
-            let name_length = self_.data.read_i16::<BigEndian>()?;
-            let (_name, data) = self_.data.split_at(name_length as usize);
-            self_.data = data;
+            let name_length = _self.data.read_i16::<BigEndian>()?;
+            let (_name, data) = _self.data.split_at(name_length as usize);
+            _self.data = data;
         }
-        self_.current_type = type_;
-        Ok(self_)
+        _self.current_type = type_;
+        Ok(_self)
     }
 }
 

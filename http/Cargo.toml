@@ -1,21 +1,23 @@
 [package]
-name = "staxhttp"
+name = "iocum_http"
 version = "0.0.0"
 edition = "2021"
-repository = "https://github.com/valaphee/stax.git"
+authors = ["Valaphee <iam@valaphee.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/valaphee/iocum.git"
 
 [dev-dependencies]
 brotli = "3.3.4"
-clap = { version = "4.2.4", features = ["derive"] }
-flate2 = "1.0.25"
+clap = { version = "4.3.3", features = ["derive"] }
+flate2 = "1.0.26"
 futures-util = "0.3.28"
 http-body-util = "0.1.0-rc.2"
 hyper = { version = "1.0.0-rc.3", features = ["full"] }
-tokio = { version = "1.28.0", features = ["full"] }
-tokio-rustls = "0.24.0"
-webpki-roots = "0.23.0"
+tokio = { version = "1.28.2", features = ["full"] }
+tokio-rustls = "0.24.1"
+webpki-roots = "0.23.1"
 
-staxtls = { path = "../tls" }
+iocum_tls = { path = "../tls" }
 
 [[example]]
 name = "http_mitm"

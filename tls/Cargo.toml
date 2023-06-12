@@ -1,9 +1,11 @@
 [package]
-name = "staxtls"
+name = "iocum_tls"
 version = "0.0.0"
 edition = "2021"
-repository = "https://github.com/valaphee/stax.git"
+authors = ["Valaphee <iam@valaphee.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/valaphee/iocum.git"
 
 [dependencies]
-openssl = "0.10.50"
-rustls = "0.21.0"
+openssl = "0.10.54"
+rustls = "0.21.1"

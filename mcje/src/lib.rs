@@ -5,7 +5,7 @@ extern crate core;
 
 use thiserror::Error;
 
-pub use staxmcje_derive::{Decode, Encode};
+pub use iocum_mcje_derive::{Decode, Encode};
 
 pub mod codec;
 pub mod packet;
@@ -20,13 +20,15 @@ pub enum Error {
     Utf8(#[from] std::str::Utf8Error),
     #[error("Json error")]
     Json(#[from] serde_json::Error),
-    #[error("Nbt error")]
-    Nbt(#[from] staxnbt::error::Error),
+    #[error("NBT error")]
+    Nbt(#[from] iocum_nbt::error::Error),
+
     // marshalling errors
     #[error("Invalid length")]
     InvalidLength,
     #[error("Unknown variant: {0}")]
     UnknownVariant(i32),
+
     // processing errors
     #[error("Unexpected end")]
     UnexpectedEnd,

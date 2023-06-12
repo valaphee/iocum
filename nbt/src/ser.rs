@@ -11,20 +11,19 @@ pub fn to_vec<T>(value: &T) -> Result<Vec<u8>>
 where
     T: serde::ser::Serialize,
 {
-    let mut ser = Serializer {
+    let mut serializer = Serializer {
         data: Vec::new(),
-
         last_type: TagType::default(),
     };
-    value.serialize(&mut ser)?;
+    value.serialize(&mut serializer)?;
     // write and splice in first named tag header
     let mut header = Vec::new();
-    header.write_i8(ser.last_type.into())?;
-    if ser.last_type != TagType::End {
+    header.write_i8(serializer.last_type.into())?;
+    if serializer.last_type != TagType::End {
         header.write_i16::<BigEndian>(0)?;
     }
-    ser.data.splice(0..0, header);
-    Ok(ser.data)
+    serializer.data.splice(0..0, header);
+    Ok(serializer.data)
 }
 
 struct Serializer {

@@ -1,6 +1,5 @@
 use std::io::{Read, Write};
 
-use crate::{Error, Result};
 use byteorder::{BigEndian, ReadBytesExt};
 use flate2::read::ZlibDecoder;
 use md5::{Digest, Md5};
@@ -8,6 +7,8 @@ use salsa20::{
     cipher::{KeyIvInit, StreamCipher},
     Salsa20,
 };
+
+use crate::{Error, Result};
 
 pub fn decode<'a, R: Read>(
     input: &mut R,
@@ -26,7 +27,7 @@ pub fn decode<'a, R: Read>(
     }
     let mut chunks = Vec::with_capacity(chunk_count as usize);
     for _ in 0..chunk_count {
-        chunks.push(Chunk::read_from(input)?);
+        chunks.push(Chunk::decode(input)?);
     }
 
     let mut content =
@@ -88,7 +89,7 @@ struct Chunk {
 }
 
 impl Chunk {
-    fn read_from<R: Read>(input: &mut R) -> Result<Self> {
+    fn decode<R: Read>(input: &mut R) -> Result<Self> {
         Ok(Self {
             encoded_size: input.read_u32::<BigEndian>()?,
             content_size: input.read_u32::<BigEndian>()?,

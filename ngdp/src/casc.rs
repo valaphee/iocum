@@ -16,15 +16,14 @@ pub struct Storage {
 }
 
 impl Storage {
-    pub fn new(path: impl AsRef<Path>) -> Result<Self> {
-        let mut pathbuf = PathBuf::new();
-        pathbuf.push(path);
+    pub fn new(_path: impl AsRef<Path>) -> Result<Self> {
+        let mut path = PathBuf::new();
+        path.push(_path);
 
-        let shared_memory = SharedMemory::decode(&mut File::open(pathbuf.join("shmem"))?, 0x10)?;
+        let shared_memory = SharedMemory::decode(&mut File::open(path.join("shmem"))?, 0x10)?;
         let mut entries = HashMap::new();
         for (bucket, version) in shared_memory.versions.into_iter().enumerate() {
-            let mut index_file =
-                File::open(pathbuf.join(format!("{bucket:02x}{version:08x}.idx")))?;
+            let mut index_file = File::open(path.join(format!("{bucket:02x}{version:08x}.idx")))?;
             let index = Index::decode(&mut index_file)?;
             for entry in index.entries {
                 let key: Box<[u8; 9]> = entry.key.clone().into_boxed_slice().try_into().unwrap();
@@ -32,10 +31,7 @@ impl Storage {
             }
         }
 
-        Ok(Self {
-            path: pathbuf,
-            entries,
-        })
+        Ok(Self { path, entries })
     }
 
     pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
@@ -50,7 +46,7 @@ impl Storage {
 
 #[derive(Debug)]
 struct SharedMemory {
-    data_path: String,
+    path: String,
     versions: Vec<u32>,
 }
 
@@ -96,7 +92,7 @@ impl SharedMemory {
         }*/
 
         Ok(Self {
-            data_path: std::str::from_utf8(
+            path: std::str::from_utf8(
                 &path[0..path
                     .as_slice()
                     .iter()
@@ -129,7 +125,7 @@ impl Index {
             return Err(Error::IntegrityError);
         }
         let mut header_data = header_data.as_slice();
-        if header_data.read_u16::<LittleEndian>()? /* Version */ != 7 {
+        if header_data.read_u16::<LittleEndian>()? != 7 {
             return Err(Error::Unsupported);
         }
         let bucket = header_data.read_u16::<LittleEndian>()?;
@@ -144,7 +140,7 @@ impl Index {
         let entries_hash = input.read_u32::<LittleEndian>()?;
         input.read_exact(&mut entries_data)?;
         /*if entries_hash != lookup3::hash32(&entries_data) {
-            bail!(CascError::IntegrityError)
+            return Err(CascError::IntegrityError);
         }*/
         let mut entries_data = entries_data.as_slice();
         let entries_count = entries_data.len()
@@ -202,7 +198,6 @@ impl Entry {
         } else {
             input.read_uint::<LittleEndian>(length_size as usize)?
         };
-
         Ok(Self {
             key,
             file,
@@ -224,10 +219,8 @@ impl Entry {
             input.seek(SeekFrom::Start(self.offset))?;
             let mut data = vec![0; (checksum_offset - self.offset) as usize];
             input.read_exact(&mut data)?;
-            if input.read_u32::<LittleEndian>()?
-                != lookup3::hash32_with_seed(data, 0x3D6BE971)
-            {
-                return Err(Error::IntegrityError)
+            if input.read_u32::<LittleEndian>()? != lookup3::hash32_with_seed(data, 0x3D6BE971) {
+                return Err(Error::IntegrityError);
             }
         }
         {
@@ -239,7 +232,6 @@ impl Entry {
             for i in encoded_offset..encoded_checksum_offset {
                 hashed_data[(i & 3) as usize] ^= input.read_u8()?;
             }
-
             let encoded_offset: [u8; 4] = (OFFSET_ENCODE_TABLE
                 [((encoded_checksum_offset + 4) & 0xF) as usize]
                 ^ (encoded_checksum_offset + 4))
@@ -253,7 +245,6 @@ impl Entry {
                 return Err(Error::IntegrityError);
             }
         }
-
         Ok(())
     }
 }

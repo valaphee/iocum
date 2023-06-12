@@ -144,18 +144,11 @@ struct EncodingPage {
 
 impl EncodingPage {
     fn decode<R: Read>(input: &mut R, key_size: u8) -> Result<Self> {
-        Ok(Self {
-            first_key: {
-                let mut first_key = vec![0; key_size as usize];
-                input.read_exact(&mut first_key)?;
-                first_key
-            },
-            md5: {
-                let mut md5 = [0; 0x10];
-                input.read_exact(&mut md5)?;
-                md5
-            },
-        })
+        let mut first_key = vec![0; key_size as usize];
+        input.read_exact(&mut first_key)?;
+        let mut md5 = [0; 0x10];
+        input.read_exact(&mut md5)?;
+        Ok(Self { first_key, md5 })
     }
 }
 
@@ -178,7 +171,6 @@ impl EncodingCToEKey {
             input.read_exact(&mut e_key)?;
             e_keys.push(e_key);
         }
-
         Ok(Self {
             c_key,
             c_size,
@@ -196,17 +188,17 @@ struct EncodingEKeySpec {
 
 impl EncodingEKeySpec {
     fn decode<R: Read>(input: &mut R, e_key_size: u8, e_specs: &[String]) -> Result<Self> {
+        let mut e_key = vec![0; e_key_size as usize];
+        input.read_exact(&mut e_key)?;
+        let e_spec = e_specs
+            .get(input.read_u32::<BigEndian>()? as usize)
+            .unwrap_or(&"".to_string())
+            .clone();
+        let e_size = input.read_uint::<BigEndian>(5)?;
         Ok(Self {
-            e_key: {
-                let mut e_key = vec![0; e_key_size as usize];
-                input.read_exact(&mut e_key)?;
-                e_key
-            },
-            e_spec: e_specs
-                .get(input.read_u32::<BigEndian>()? as usize)
-                .unwrap_or(&"".to_string())
-                .clone(),
-            e_size: input.read_uint::<BigEndian>(5)?,
+            e_key,
+            e_spec,
+            e_size,
         })
     }
 }
@@ -216,11 +208,10 @@ fn read_asciiz<R: Read>(input: &mut R) -> Result<String> {
     let mut data = Vec::new();
     loop {
         let value = input.read_u8()?;
-        if value == 0u8 {
+        if value == 0 {
             break;
         }
         data.push(value as char);
     }
-
     Ok(data.iter().collect())
 }

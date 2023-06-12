@@ -1,0 +1,15 @@
+[package]
+name = "iocum_stu"
+version = "0.0.0"
+edition = "2021"
+authors = ["Valaphee <iam@valaphee.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/valaphee/prometheus.git"
+description = "Overwatch's proprietary STU-file format support for serde"
+
+[dependencies]
+bytemuck = { version = "1.13.1", features = ["derive"] }
+byteorder = "1.4.3"
+crc = "3.0.1"
+serde = { version = "1.0.164", features = ["derive"] }
+thiserror = "1.0.40"

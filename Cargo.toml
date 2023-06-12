@@ -7,6 +7,8 @@ members = [
     "mojang_session_api",
     "nbt",
     "ngdp",
+    "pro",
+    "stu",
     "tls",
 ]
 resolver = "2"

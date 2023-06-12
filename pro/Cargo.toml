@@ -1,0 +1,16 @@
+[package]
+name = "iocum_pro"
+version = "0.0.0"
+edition = "2021"
+authors = ["Valaphee <iam@valaphee.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/valaphee/iocum.git"
+
+[dependencies]
+aes = "0.8.2"
+bitflags = "2.0.0-rc.1"
+bytemuck = { version = "1.13.0", features = ["derive"] }
+byteorder = "1.4.3"
+cbc = { version = "0.1.2", features = ["alloc"] }
+serde = { version = "1.0.152", features = ["derive"] }
+sha1 = "0.10.5"

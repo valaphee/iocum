@@ -2,13 +2,12 @@ use std::io::{Read, Write};
 
 use byteorder::{BigEndian, ReadBytesExt};
 use flate2::read::ZlibDecoder;
-use md5::{Digest, Md5};
 use salsa20::{
     cipher::{KeyIvInit, StreamCipher},
     Salsa20,
 };
 
-use crate::{Error, Result};
+use crate::{md5, Error, Result};
 
 pub fn decode<'a, R: Read>(
     input: &mut R,
@@ -18,7 +17,8 @@ pub fn decode<'a, R: Read>(
         return Err(Error::Unsupported);
     }
     let header_size = input.read_u32::<BigEndian>()?;
-    if input.read_u8()? != 0xF {
+    let flags = input.read_u8()?;
+    if flags != 0xF {
         return Err(Error::Unsupported);
     }
     let chunk_count = input.read_u24::<BigEndian>()?;
@@ -36,9 +36,7 @@ pub fn decode<'a, R: Read>(
         let mut encoded = vec![0; chunk.e_size as usize];
         input.read_exact(&mut encoded)?;
         let mut encoded = encoded.as_slice();
-        let mut md5 = Md5::new();
-        md5.update(encoded);
-        if chunk.md5 != md5.finalize().as_slice() {
+        if chunk.md5 != md5(encoded) {
             return Err(Error::IntegrityError);
         }
         let encoding_mode = encoded.read_u8()?;
@@ -83,7 +81,7 @@ pub fn decode<'a, R: Read>(
 struct Chunk {
     e_size: u32,
     c_size: u32,
-    md5: [u8; 16],
+    md5: u128,
 }
 
 impl Chunk {
@@ -91,11 +89,7 @@ impl Chunk {
         Ok(Self {
             e_size: input.read_u32::<BigEndian>()?,
             c_size: input.read_u32::<BigEndian>()?,
-            md5: {
-                let mut md5 = [0; 16];
-                input.read_exact(&mut md5)?;
-                md5
-            },
+            md5: input.read_u128::<BigEndian>()?,
         })
     }
 }

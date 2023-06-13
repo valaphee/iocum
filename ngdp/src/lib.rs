@@ -1,3 +1,7 @@
+use std::io::Read;
+
+use byteorder::ReadBytesExt;
+use md5::{Digest, Md5};
 use thiserror::Error;
 
 pub mod blte;
@@ -25,3 +29,21 @@ pub enum Error {
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+fn read_asciiz<R: Read>(input: &mut R) -> Result<String> {
+    let mut data = Vec::new();
+    loop {
+        let value = input.read_u8()?;
+        if value == 0 {
+            break;
+        }
+        data.push(value as char);
+    }
+    Ok(data.iter().collect())
+}
+
+fn md5(value: impl AsRef<[u8]>) -> u128 {
+    let mut md5 = Md5::new();
+    md5.update(value);
+    u128::from_be_bytes(md5.finalize().try_into().unwrap())
+}

@@ -1,5 +1,4 @@
-use aes::cipher::block_padding::NoPadding;
-use aes::cipher::{BlockDecryptMut, KeyIvInit};
+use aes::cipher::{block_padding::NoPadding, BlockDecryptMut, KeyIvInit};
 use bytemuck::{Pod, Zeroable};
 use byteorder::{LittleEndian, ReadBytesExt};
 use sha1::{Digest, Sha1};

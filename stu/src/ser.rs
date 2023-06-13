@@ -1,6 +1,7 @@
-use crate::{error::Error, DynamicDataHeader, Field, CRC32};
 use byteorder::{LittleEndian, WriteBytesExt};
 use serde::Serialize;
+
+use crate::{error::Error, DynamicDataHeader, Field, CRC32};
 
 struct Serializer {
     data: Vec<u8>,

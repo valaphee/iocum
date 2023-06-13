@@ -12,7 +12,7 @@ use crate::{blte, Error, Result};
 
 pub struct Storage {
     path: PathBuf,
-    entries: HashMap<[u8; 9], Entry>,
+    entries: HashMap<u128, Entry>,
 }
 
 impl Storage {
@@ -26,16 +26,15 @@ impl Storage {
             let mut index_file = File::open(path.join(format!("{bucket:02x}{version:08x}.idx")))?;
             let index = Index::decode(&mut index_file)?;
             for entry in index.entries {
-                let key: Box<[u8; 9]> = entry.key.clone().into_boxed_slice().try_into().unwrap();
-                entries.insert(*key, entry);
+                entries.insert(entry.key, entry);
             }
         }
 
         Ok(Self { path, entries })
     }
 
-    pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let Some(entry) = self.entries.get(&key[..9]) else {
+    pub fn get(&self, key: u128) -> Result<Option<Vec<u8>>> {
+        let Some(entry) = self.entries.get(&(key >> 56)) else {
             return Ok(None);
         };
         let mut file = File::open(self.path.join(format!("data.{:03}", entry.file)))?;
@@ -51,14 +50,15 @@ struct SharedMemory {
 
 impl SharedMemory {
     fn decode<R: Read + Seek>(input: &mut R, bucket_count: usize) -> Result<Self> {
-        let header_type = input.read_u32::<LittleEndian>()?;
-        if header_type != 4 && header_type != 5 {
+        // header block
+        let block_type = input.read_u32::<LittleEndian>()?;
+        if block_type != 4 && block_type != 5 {
             return Err(Error::Unsupported);
         }
-        let header_size = input.read_u32::<LittleEndian>()?;
+        let block_size = input.read_u32::<LittleEndian>()?;
         let mut path = vec![0; 0x100];
         input.read_exact(&mut path)?;
-        for _ in 0..(header_size - 4 - 4 - 0x100 - bucket_count as u32 * 4) / (2 * 4) {
+        for _ in 0..(block_size - 4 - 4 - 0x100 - bucket_count as u32 * 4) / (2 * 4) {
             let _block_size = input.read_u32::<LittleEndian>()?;
             let _block_offset = input.read_u32::<LittleEndian>()?;
         }
@@ -67,13 +67,14 @@ impl SharedMemory {
             versions.push(input.read_u32::<LittleEndian>()?);
         }
 
-        /*if input.read_u32::<LittleEndian>()? /* Free Space Type */ != 1 {
+        // free space block
+        /*if input.read_u32::<LittleEndian>()? != 1 {
             return Err(Error::Unsupported);
         }
-        let free_space_size = input.read_u32::<LittleEndian>()?;
-        let mut free_spaces = Vec::with_capacity(free_space_size as usize);
+        let block_size = input.read_u32::<LittleEndian>()?;
+        let mut free_spaces = Vec::with_capacity(block_size as usize);
         input.seek(SeekFrom::Current(0x18))?;
-        for _ in 0..free_space_size {
+        for _ in 0..block_size {
             let length = Entry::decode(input, 0, 5, 0, 30)?;
             free_spaces.push(Entry {
                 key: vec![],
@@ -82,8 +83,8 @@ impl SharedMemory {
                 length: length.offset,
             });
         }
-        input.seek(SeekFrom::Current(((1090 - free_space_size) * 5) as i64))?;
-        for index in 0..free_space_size {
+        input.seek(SeekFrom::Current(((1090 - block_size) * 5) as i64))?;
+        for index in 0..block_size {
             let file_offset = Entry::decode(input, 0, 5, 0, 30)?;
             let entry = &mut free_spaces[index as usize];
             entry.file = file_offset.file;
@@ -116,6 +117,7 @@ struct Index {
 
 impl Index {
     fn decode<R: Read>(input: &mut R) -> Result<Self> {
+        // header
         let mut header_data = vec![0; input.read_u32::<LittleEndian>()? as usize];
         let header_hash = input.read_u32::<LittleEndian>()?;
         input.read_exact(&mut header_data)?;
@@ -132,13 +134,14 @@ impl Index {
         let entry_key_size = header_data.read_u8()?;
         let entry_segment_bits = header_data.read_u8()?;
         let limit = header_data.read_u64::<LittleEndian>()?;
-        input.read_exact(&mut [0; 0x8])?;
+        input.read_exact(&mut [0; 0x8])?; // padding
 
+        // entries
         let mut entries_data = vec![0; input.read_u32::<LittleEndian>()? as usize];
         let _entries_hash = input.read_u32::<LittleEndian>()?;
         input.read_exact(&mut entries_data)?;
         /*if entries_hash != lookup3::hash32(&entries_data) {
-            return Err(CascError::IntegrityError);
+            return Err(Error::IntegrityError);
         }*/
         let mut entries_data = entries_data.as_slice();
         let entries_count = entries_data.len()
@@ -167,7 +170,7 @@ impl Index {
 }
 
 struct Entry {
-    pub key: Vec<u8>,
+    pub key: u128,
     pub file: u64,
     pub offset: u64,
     pub length: u64,
@@ -181,8 +184,7 @@ impl Entry {
         key_size: u8,
         segment_bits: u8,
     ) -> Result<Self> {
-        let mut key = vec![0; key_size as usize];
-        input.read_exact(&mut key)?;
+        let key = input.read_uint128::<BigEndian>(key_size as usize)?;
         let offset_size = (segment_bits + 7) / 8;
         let file_size = location_size - offset_size;
         let mut file = input.read_uint::<BigEndian>(file_size as usize)?;

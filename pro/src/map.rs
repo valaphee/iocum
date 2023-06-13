@@ -1,5 +1,6 @@
-use crate::guid::Guid;
 use serde::Deserialize;
+
+use crate::guid::Guid;
 
 #[derive(Deserialize, Debug)]
 pub struct MapHeader {

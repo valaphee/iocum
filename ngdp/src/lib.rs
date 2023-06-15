@@ -1,3 +1,5 @@
+#![feature(seek_stream_len)]
+
 use std::io::Read;
 
 use byteorder::ReadBytesExt;

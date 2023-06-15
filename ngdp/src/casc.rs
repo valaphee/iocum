@@ -121,10 +121,10 @@ impl Index {
         let mut header_data = vec![0; input.read_u32::<LittleEndian>()? as usize];
         let header_hash = input.read_u32::<LittleEndian>()?;
         input.read_exact(&mut header_data)?;
-        if header_hash != lookup3::hash32(&header_data) {
+        let mut header_data = header_data.as_slice();
+        if header_hash != lookup3::hash32(header_data) {
             return Err(Error::IntegrityError);
         }
-        let mut header_data = header_data.as_slice();
         if header_data.read_u16::<LittleEndian>()? != 7 {
             return Err(Error::Unsupported);
         }
@@ -140,14 +140,14 @@ impl Index {
         let mut entries_data = vec![0; input.read_u32::<LittleEndian>()? as usize];
         let _entries_hash = input.read_u32::<LittleEndian>()?;
         input.read_exact(&mut entries_data)?;
-        /*if entries_hash != lookup3::hash32(&entries_data) {
+        let mut entries_data = entries_data.as_slice();
+        /*if entries_hash != lookup3::hash32(entries_data) {
             return Err(Error::IntegrityError);
         }*/
-        let mut entries_data = entries_data.as_slice();
-        let entries_count = entries_data.len()
+        let entry_count = entries_data.len()
             / (entry_length_size + entry_location_size + entry_key_size) as usize;
-        let mut entries = Vec::with_capacity(entries_count);
-        for _ in 0..entries_count {
+        let mut entries = Vec::with_capacity(entry_count);
+        for _ in 0..entry_count {
             entries.push(Entry::decode(
                 &mut entries_data,
                 entry_length_size,
@@ -170,10 +170,10 @@ impl Index {
 }
 
 struct Entry {
-    pub key: u128,
-    pub file: u64,
-    pub offset: u64,
-    pub length: u64,
+    key: u128,
+    file: u64,
+    offset: u64,
+    length: u64,
 }
 
 impl Entry {

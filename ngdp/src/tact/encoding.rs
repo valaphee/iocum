@@ -1,80 +1,8 @@
-use std::{
-    collections::HashMap,
-    io::{BufRead, BufReader, Read},
-};
+use std::{collections::HashMap, io::Read};
 
 use byteorder::{BigEndian, ReadBytesExt};
 
 use crate::{md5, read_asciiz, Error, Result};
-
-pub struct BuildInfo {
-    build_config: u128,
-}
-
-impl BuildInfo {
-    pub fn parse<R: Read>(input: &mut R) -> Result<Vec<Self>> {
-        let mut header = true;
-        let mut rows = Vec::new();
-        for row in BufReader::new(input).lines() {
-            let row = row.unwrap();
-            if header {
-                header = false;
-                continue;
-            }
-
-            let mut columns = row.split('|').skip(2);
-            rows.push(BuildInfo {
-                build_config: u128::from_str_radix(columns.next().unwrap(), 16).unwrap(),
-            });
-        }
-
-        Ok(rows)
-    }
-}
-
-pub struct Record {
-    c_key: u128,
-    e_key: Option<u128>,
-}
-
-impl Record {
-    pub fn parse(value: &str) -> Self {
-        let mut values = value.split(' ');
-        Self {
-            c_key: u128::from_str_radix(values.next().unwrap(), 16).unwrap(),
-            e_key: values
-                .next()
-                .map(|value| u128::from_str_radix(value, 16).unwrap()),
-        }
-    }
-}
-
-pub struct BuildConfig {
-    root: Record,
-    encoding: Record,
-}
-
-impl BuildConfig {
-    pub fn parse<R: Read>(input: &mut R) -> Result<Self> {
-        let mut entries = HashMap::new();
-        for line in BufReader::new(input).lines() {
-            let line = line.unwrap().trim().to_string();
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-
-            let mut entry = line.split('=');
-            entries.insert(
-                entry.next().unwrap().trim().to_owned(),
-                entry.next().unwrap().trim().to_owned(),
-            );
-        }
-        Ok(Self {
-            root: Record::parse(&entries["root"]),
-            encoding: Record::parse(&entries["encoding"]),
-        })
-    }
-}
 
 pub struct Encoding {
     c_e_keys: HashMap<u128, EncodingCEKeyEntry>,
@@ -120,7 +48,7 @@ impl Encoding {
         }
         let mut c_e_keys = HashMap::new();
         for c_e_key_page in c_e_key_pages {
-            let mut c_e_key_page_data = vec![0; c_e_key_page_size as usize * 0x400];
+            let mut c_e_key_page_data = vec![0; c_e_key_page_size as usize * 1024];
             input.read_exact(&mut c_e_key_page_data)?;
             let mut c_e_key_page_data = c_e_key_page_data.as_slice();
             if c_e_key_page.md5 != md5(c_e_key_page_data) {
@@ -137,7 +65,7 @@ impl Encoding {
         }
         let mut e_key_specs = HashMap::new();
         for e_key_spec_page in e_key_spec_pages {
-            let mut e_key_spec_page_data = vec![0; e_key_spec_page_size as usize * 0x400];
+            let mut e_key_spec_page_data = vec![0; e_key_spec_page_size as usize * 1024];
             input.read_exact(&mut e_key_spec_page_data)?;
             let mut e_key_spec_page_data = e_key_spec_page_data.as_slice();
             if e_key_spec_page.md5 != md5(e_key_spec_page_data) {

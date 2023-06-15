@@ -7,7 +7,7 @@ use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
 
 pub use encoding::Encoding;
 
-use crate::{Error, md5, Result};
+use crate::{Error, md5, read_asciiz, Result};
 
 mod encoding;
 
@@ -195,5 +195,91 @@ impl Index {
         }
 
         Ok(Index { entries })
+    }
+}
+
+#[derive(Debug)]
+pub struct Install {
+    pub tags: Vec<InstallTag>,
+}
+
+#[derive(Debug)]
+pub struct InstallTag {
+    pub name: String,
+    pub kind: u16,
+    pub files: Vec<InstallEntry>,
+}
+
+#[derive(Debug)]
+pub struct InstallEntry {
+    pub name: String,
+    pub hash: u128,
+    pub length: u32,
+}
+
+impl Install {
+    pub fn decode<R: Read>(input: &mut R) -> Result<Self> {
+        if input.read_u16::<BigEndian>()? != u16::from_be_bytes(*b"IN") {
+            return Err(Error::Unsupported);
+        }
+        let version = input.read_u8()?;
+        if version != 1 {
+            return Err(Error::Unsupported);
+        }
+        let hash_size = input.read_u8()?;
+        if hash_size != 16 {
+            return Err(Error::Unsupported);
+        }
+        let tag_count = input.read_u16::<BigEndian>()?;
+        let entry_count = input.read_u32::<BigEndian>()?;
+        for _ in 0..tag_count {
+            InstallTag {
+                name: read_asciiz(input)?,
+                kind: input.read_u16::<BigEndian>()?,
+                files: vec![],
+            };
+            // mask
+        }
+        for _ in 0..entry_count {
+            InstallEntry {
+                name: read_asciiz(input)?,
+                hash: input.read_u128::<BigEndian>()?,
+                length: input.read_u32::<BigEndian>()?,
+            };
+        }
+        Ok(Install { tags: vec![] })
+    }
+}
+
+pub struct Download {}
+
+impl Download {
+    pub fn decode<R: Read>(input: &mut R) -> Result<Self> {
+        if input.read_u16::<BigEndian>()? != u16::from_be_bytes(*b"DL") {
+            return Err(Error::Unsupported);
+        }
+        let version = input.read_u8()?;
+        if version != 1 {
+            return Err(Error::Unsupported);
+        }
+        let key_size = input.read_u8()?;
+        if key_size != 16 {
+            return Err(Error::Unsupported);
+        }
+        input.read_u8()?;
+        let entry_count = input.read_u32::<BigEndian>()?;
+        let tag_count = input.read_u16::<BigEndian>()?;
+        for _ in 0..entry_count {
+            input.read_u128::<BigEndian>()?;
+            input.read_uint::<BigEndian>(5)?;
+            input.read_u8()?;
+            input.read_u32::<BigEndian>()?;
+        }
+        for _ in 0..tag_count {
+            read_asciiz(input)?;
+            input.read_u16::<BigEndian>()?;
+            // mask
+        }
+        Ok(Download {})
     }
 }

@@ -1,10 +1,10 @@
 [package]
-name = "iocum_bgs"
+name = "iokum_bgs"
 version = "0.0.0"
 edition = "2021"
 authors = ["Valaphee <iam@valaphee.com>"]
 license = "Apache-2.0"
-repository = "https://github.com/valaphee/iocum.git"
+repository = "https://github.com/valaphee/iokum.git"
 
 [dependencies]
 async-trait = "0.1.68"
@@ -26,7 +26,7 @@ tokio-rustls = "0.24.1"
 tokio-tungstenite = { version = "0.19.0", features = ["native-tls"] }
 url = "2.4.0"
 
-iocum_tls = { path = "../tls" }
+iokum_tls = { path = "../tls" }
 
 [build-dependencies]
 glob = "0.3.1"

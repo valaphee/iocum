@@ -1056,14 +1056,14 @@ pub struct Nbt<T>(pub T);
 
 impl<T: Serialize> Encode for Nbt<T> {
     fn encode(&self, output: &mut impl Write) -> Result<()> {
-        output.write_all(&iocum_nbt::ser::to_vec(&self.0)?)?;
+        output.write_all(&iokum_nbt::ser::to_vec(&self.0)?)?;
         Ok(())
     }
 }
 
 impl<T: DeserializeOwned> Decode<'_> for Nbt<T> {
     fn decode(input: &mut &'_ [u8]) -> Result<Self> {
-        Ok(Nbt(iocum_nbt::de::from_slice(input)?))
+        Ok(Nbt(iokum_nbt::de::from_slice(input)?))
     }
 }
 

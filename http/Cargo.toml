@@ -1,10 +1,10 @@
 [package]
-name = "iocum_http"
+name = "iokum_http"
 version = "0.0.0"
 edition = "2021"
 authors = ["Valaphee <iam@valaphee.com>"]
 license = "Apache-2.0"
-repository = "https://github.com/valaphee/iocum.git"
+repository = "https://github.com/valaphee/iokum.git"
 
 [dev-dependencies]
 brotli = "3.3.4"
@@ -17,7 +17,7 @@ tokio = { version = "1.28.2", features = ["full"] }
 tokio-rustls = "0.24.1"
 webpki-roots = "0.23.1"
 
-iocum_tls = { path = "../tls" }
+iokum_tls = { path = "../tls" }
 
 [[example]]
 name = "http_mitm"

@@ -4,7 +4,7 @@ version = "1.0.0"
 edition = "2018"
 authors = ["Valaphee <iam@valaphee.com>"]
 license = "Apache-2.0"
-repository = "https://github.com/valaphee/iocum.git"
+repository = "https://github.com/valaphee/iokum.git"
 description = "OpenAPI-generated client for interfacing with Mojang's session api"
 
 [dependencies]

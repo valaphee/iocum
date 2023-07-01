@@ -5,7 +5,7 @@ extern crate core;
 
 use thiserror::Error;
 
-pub use iocum_mcje_derive::{Decode, Encode};
+pub use iokum_mcje_derive::{Decode, Encode};
 
 pub mod codec;
 pub mod packet;
@@ -21,7 +21,7 @@ pub enum Error {
     #[error("Json error")]
     Json(#[from] serde_json::Error),
     #[error("NBT error")]
-    Nbt(#[from] iocum_nbt::error::Error),
+    Nbt(#[from] iokum_nbt::error::Error),
 
     // marshalling errors
     #[error("Invalid length")]

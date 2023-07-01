@@ -1,10 +1,10 @@
 [package]
-name = "iocum_nbt"
+name = "iokum_nbt"
 version = "0.0.0"
 edition = "2021"
 authors = ["Valaphee <iam@valaphee.com>"]
 license = "Apache-2.0"
-repository = "https://github.com/valaphee/iocum.git"
+repository = "https://github.com/valaphee/iokum.git"
 description = "Implementation for Minecraft's named binary tag file format using serde"
 
 [dependencies]

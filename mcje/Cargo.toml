@@ -1,10 +1,10 @@
 [package]
-name = "iocum_mcje"
+name = "iokum_mcje"
 version = "1.19.4-0"
 edition = "2021"
 authors = ["Valaphee <iam@valaphee.com>"]
 license = "Apache-2.0"
-repository = "https://github.com/valaphee/iocum.git"
+repository = "https://github.com/valaphee/iokum.git"
 description = "Implementation for Minecraft: Java Edition's protocol"
 
 [dependencies]
@@ -25,8 +25,8 @@ tokio-util = { version = "0.7.8", features = ["codec"] }
 uuid = { version = "1.3.3", features = ["v4"] }
 
 mojang_session_api = { path = "../mojang_session_api" }
-iocum_nbt = { path = "../nbt" }
-iocum_mcje_derive = { path = "../mcje_derive" }
+iokum_nbt = { path = "../nbt" }
+iokum_mcje_derive = { path = "../mcje_derive" }
 
 [dev-dependencies]
 clap = { version = "4.3.3", features = ["derive"] }

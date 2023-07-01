@@ -1,11 +1,11 @@
 use std::{fs::File, path::PathBuf};
 use std::collections::HashMap;
 
-use iocum_ngdp::{
+use iokum_ngdp::{
     casc::Storage,
     tact::{BuildConfig, BuildInfo, Encoding},
 };
-use iocum_ngdp::tact::RootFile;
+use iokum_ngdp::tact::RootFile;
 
 fn main() {
     let path = PathBuf::from("...");

@@ -1,0 +1,11 @@
+[package]
+name = "iokum_proutil"
+version = "0.0.0"
+edition = "2021"
+authors = ["Valaphee <iam@valaphee.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/valaphee/iokum.git"
+
+[dependencies]
+byteorder = "1.4.3"
+object = { git = "https://github.com/valaphee/object.git", branch = "va-space", features = ["pe"] }

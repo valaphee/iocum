@@ -1,14 +1,15 @@
 [workspace]
 members = [
-    "bgs",
+    #"bgs",
     "http",
     "mcje",
     "mcje_derive",
     "mojang_session_api",
     "nbt",
-    "ngdp",
-    "pro",
-    "stu",
+    #"ngdp",
+    #"pro",
+    "proutil",
+    #"stu",
     "tls",
 ]
 resolver = "2"

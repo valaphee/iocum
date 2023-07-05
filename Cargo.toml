@@ -6,6 +6,7 @@ members = [
     "mcje_derive",
     "mojang_session_api",
     "nbt",
+    "nfs",
     #"ngdp",
     #"pro",
     "proutil",

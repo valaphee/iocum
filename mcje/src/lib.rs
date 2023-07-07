@@ -9,6 +9,7 @@ pub use iokum_mcje_derive::{Decode, Encode};
 
 pub mod codec;
 pub mod packet;
+pub mod resource_pack;
 pub mod types;
 
 #[derive(Error, Debug)]

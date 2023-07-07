@@ -4,10 +4,9 @@ use std::{
 };
 
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
-
 pub use encoding::Encoding;
 
-use crate::{Error, md5, read_asciiz, Result};
+use crate::{md5, read_asciiz, Error, Result};
 
 mod encoding;
 

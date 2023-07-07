@@ -2,6 +2,7 @@
 members = [
     #"bgs",
     "http",
+    "mcbe",
     "mcje",
     "mcje_derive",
     "mojang_session_api",

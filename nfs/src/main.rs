@@ -130,7 +130,11 @@ fn main() {
         };
         let offset = *entry_offsets.get(&file_name).unwrap();
 
-        let Ok(mut archive) = File::open(format!(r#"C:\Users\valaphee\Downloads\LAOnline\nfs\{}\{}"#, entry.path_name.chars().next().unwrap(), entry.path_name)) else {
+        let Ok(mut archive) = File::open(format!(
+            r#"C:\Users\valaphee\Downloads\LAOnline\nfs\{}\{}"#,
+            entry.path_name.chars().next().unwrap(),
+            entry.path_name
+        )) else {
             continue;
         };
         archive.seek(SeekFrom::Start(offset as u64)).unwrap();

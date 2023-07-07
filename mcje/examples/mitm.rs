@@ -142,7 +142,8 @@ async fn handle(
                         server_id,
                         public_key,
                         nonce,
-                    } = next(&mut remote_socket).await?.decode()? else {
+                    } = next(&mut remote_socket).await?.decode()?
+                    else {
                         return Err(Error::Unexpected);
                     };
                     // generate random key

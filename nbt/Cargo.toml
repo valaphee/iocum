@@ -10,5 +10,5 @@ description = "Implementation for Minecraft's named binary tag file format using
 [dependencies]
 byteorder = "1.4.3"
 num_enum = "0.6.1"
-serde = "1.0.164"
+serde = "1.0.167"
 thiserror = "1.0.40"

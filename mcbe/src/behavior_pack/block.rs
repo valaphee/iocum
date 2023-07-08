@@ -224,15 +224,15 @@ pub enum Component {
 pub struct MaterialInstance {
     /// Should this material have ambient occlusion applied when lighting? If
     /// true, shadows will be created around and underneath the block.
-    #[serde(default = "return_true", skip_serializing_if = "is_true")]
+    #[serde(default = "default_true", skip_serializing_if = "if_true")]
     pub ambient_occlusion: bool,
 
     /// Should this material be dimmed by the direction it's facing?
-    #[serde(default = "return_true", skip_serializing_if = "is_true")]
+    #[serde(default = "default_true", skip_serializing_if = "if_true")]
     pub face_dimming: bool,
 
     /// The render method to use.
-    #[serde(default, skip_serializing_if = "RenderMethod::is_default")]
+    #[serde(default, skip_serializing_if = "RenderMethod::if_default")]
     pub render_method: RenderMethod,
 
     /// Texture name for the material.
@@ -260,7 +260,7 @@ pub enum RenderMethod {
 }
 
 impl RenderMethod {
-    fn is_default(&self) -> bool {
+    fn if_default(&self) -> bool {
         matches!(self, RenderMethod::Opaque)
     }
 }
@@ -283,10 +283,10 @@ pub struct Permutation {
     pub components: Vec<Component>,
 }
 
-fn return_true() -> bool {
+fn default_true() -> bool {
     true
 }
 
-fn is_true(value: &bool) -> bool {
+fn if_true(value: &bool) -> bool {
     *value
 }

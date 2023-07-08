@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use glam::{Vec2, Vec3};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -29,7 +30,7 @@ pub struct Description {
     /// Offset of the visibility bounding box from the entity location point (in
     /// model space units).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub visible_bounds_offset: Option<[f32; 3]>,
+    pub visible_bounds_offset: Option<Vec3>,
 
     /// Assumed width in texels of the texture that will be bound to this
     /// geometry.
@@ -54,12 +55,12 @@ pub struct Bone {
 
     /// The bone pivots around this point (in model space units).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pivot: Option<[f32; 3]>,
+    pub pivot: Option<Vec3>,
 
     /// This is the initial rotation of the bone around the pivot, pre-animation
     /// (in degrees, x-then-y-then-z order).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub rotation: Option<[f32; 3]>,
+    pub rotation: Option<Vec3>,
 
     /// Mirrors the UV's of the unrotated cubes along the x axis, also causes
     /// the east/west faces to get flipped.
@@ -81,22 +82,22 @@ pub struct Cube {
     /// This point declares the unrotated lower corner of cube (smallest x/y/z
     /// value in model space units).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub origin: Option<[f32; 3]>,
+    pub origin: Option<Vec3>,
 
     /// The cube extends this amount relative to its origin (in model space
     /// units).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub size: Option<[f32; 3]>,
+    pub size: Option<Vec3>,
 
     /// The cube is rotated by this amount (in degrees, x-then-y-then-z order)
     /// around the pivot.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub rotation: Option<[f32; 3]>,
+    pub rotation: Option<Vec3>,
 
     /// If this field is specified, rotation of this cube occurs around this
     /// point, otherwise its rotation is around the center of the box.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pivot: Option<[f32; 3]>,
+    pub pivot: Option<Vec3>,
 
     /// Grow this box by this additive amount in all directions (in model space
     /// units), this field overrides the bone's inflate field for this cube
@@ -113,11 +114,12 @@ pub struct Cube {
     /// This is an alternate per-face uv mapping which specifies each face of
     /// the cube.  Omitting a face will cause that face to not get drawn.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    pub uv: HashMap<Face, Uv>,
+    pub uv: HashMap<FaceKey, Face>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
-pub enum Face {
+#[serde(rename_all = "snake_case")]
+pub enum FaceKey {
     North,
     South,
     East,
@@ -127,15 +129,15 @@ pub enum Face {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Uv {
+pub struct Face {
     /// Specifies the uv origin for the face. For this face, it is the
     /// upper-left corner, when looking at the face with y being up.
-    pub uv: [f32; 2],
+    pub uv: Vec2,
 
     /// The face maps this many texels from the uv origin. If not specified, the
     /// box dimensions are used instead.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub uv_size: Option<[f32; 2]>,
+    pub uv_size: Option<Vec2>,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub material_instance: Option<String>,

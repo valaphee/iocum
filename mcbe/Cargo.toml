@@ -8,6 +8,7 @@ repository = "https://github.com/valaphee/iokum.git"
 description = "Implementation for Minecraft: Bedrock Edition's protocol"
 
 [dependencies]
+glam = { version = "0.24.1", features = ["serde"] }
 serde = { version = "1.0.167", features = ["derive"] }
 serde_json = "1.0.100"
 serde_with = "3.0.0"

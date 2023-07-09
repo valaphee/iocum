@@ -9,12 +9,14 @@ use glam::{Vec2, Vec3};
 use iokum_mcbe::{
     behavior_pack::{
         block,
-        block::{MaterialInstance, RenderMethod},
+        block::{MaterialInstance, Property, RenderMethod},
     },
     pack::{Data, VersionedData},
-    resource_pack::{geometry, texture_atlas},
+    resource_pack::{
+        flipbook_textures, geometry, texture_atlas,
+    },
 };
-use iokum_mcje::resource_pack::{block_state, model};
+use iokum_mcje::resource_pack::{block_state, mcmeta, model};
 
 struct Importer {
     asset_path: PathBuf,
@@ -22,7 +24,7 @@ struct Importer {
     resource_pack_path: PathBuf,
 
     components: HashMap<String, Vec<block::Component>>,
-    geometries: HashMap<String, (Vec<model::Element>, Vec<model::Group>)>,
+    geometries: HashMap<String, Vec<model::Element>>,
     textures: HashSet<String>,
 }
 
@@ -68,6 +70,46 @@ impl Importer {
         {
             block_state::BlockState::Variants(variants) => {
                 for (variant_key, variant) in variants {
+                    // collect properties (unordered)
+                    if !variant_key.is_empty() {
+                        for key_value in variant_key.split(',') {
+                            let (key, value) = key_value.split_once('=').unwrap();
+                            match block.description.properties.entry(format!("cb:{}", key)) {
+                                Entry::Occupied(mut entry) => match entry.get_mut() {
+                                    Property::Bool(values) => {
+                                        let value = value.parse().unwrap();
+                                        if !values.contains(&value) {
+                                            values.push(value)
+                                        }
+                                    }
+                                    Property::Int(values) => {
+                                        let value = value.parse().unwrap();
+                                        if !values.contains(&value) {
+                                            values.push(value)
+                                        }
+                                    }
+                                    Property::Enum(values) => {
+                                        let value = value.to_string();
+                                        if !values.contains(&value) {
+                                            values.push(value)
+                                        }
+                                    }
+                                    _ => unreachable!(),
+                                },
+                                Entry::Vacant(entry) => {
+                                    entry.insert(if let Ok(value) = value.parse::<bool>() {
+                                        Property::Bool(vec![value])
+                                    } else if let Ok(value) = value.parse::<u32>() {
+                                        Property::Int(vec![value])
+                                    } else {
+                                        Property::Enum(vec![value.to_string()])
+                                    });
+                                }
+                            }
+                        }
+                    }
+
+                    // import model and create components
                     let model = variant
                         .0
                         .into_iter()
@@ -77,10 +119,12 @@ impl Importer {
                     if model.x != 0 || model.y != 0 {
                         components.push(block::Component::Transformation {
                             translation: Vec3::ZERO,
-                            scale: Vec3::ZERO,
+                            scale: Vec3::ONE,
                             rotation: Vec3::new(model.x as f32, model.y as f32, 0.0),
                         });
                     }
+
+                    // either set components or add to permutations
                     if variant_key.is_empty() {
                         block.components = components;
                     } else {
@@ -123,10 +167,10 @@ impl Importer {
         }
 
         // merge all models
+        let mut ambient_occlusion = None;
         let mut textures = HashMap::new();
         let mut geometry_key = String::new();
         let mut geometry_elements = vec![];
-        let mut geometry_groups = vec![];
         let mut parent_ = Some(model.clone());
         while let Some(parent) = &parent_ {
             let (namespace, key) = parent.split_once(':').unwrap();
@@ -139,6 +183,9 @@ impl Importer {
 
             println!("Model: {}", parent);
             let model: model::Model = serde_json::from_reader(file).unwrap();
+            if ambient_occlusion.is_none() {
+                ambient_occlusion = Some(model.ambient_occlusion)
+            }
             for (key, value) in model.textures {
                 if let Entry::Vacant(entry) = textures.entry(key) {
                     entry.insert(value);
@@ -148,7 +195,6 @@ impl Importer {
                 geometry_key = parent.rsplit('/').next().unwrap().to_string();
                 if !self.geometries.contains_key(&geometry_key) {
                     geometry_elements = model.elements;
-                    geometry_groups = model.groups;
                 }
             }
             parent_ = model.parent.clone();
@@ -175,7 +221,7 @@ impl Importer {
         // save geometry
         if !geometry_elements.is_empty() {
             self.geometries
-                .insert(geometry_key.clone(), (geometry_elements, geometry_groups));
+                .insert(geometry_key.clone(), geometry_elements);
         }
 
         // save components
@@ -193,7 +239,7 @@ impl Importer {
                         (
                             texture_key,
                             MaterialInstance {
-                                ambient_occlusion: true,
+                                ambient_occlusion: ambient_occlusion.unwrap(),
                                 face_dimming: true,
                                 render_method: RenderMethod::Opaque,
                                 texture: texture_name,
@@ -216,6 +262,7 @@ impl Importer {
             texture_data: Default::default(),
             texture_name: "atlas.terrain".to_string(),
         };
+        let mut flipbook_textures: Vec<flipbook_textures::FlipbookTexture> = vec![];
         for texture in &self.textures {
             let (namespace, key) = texture
                 .split_once(':')
@@ -229,8 +276,32 @@ impl Importer {
             )
             .unwrap();
 
+            // read mcmeta
+            let mcmeta_path = self
+                .asset_path
+                .join(format!("{}/textures/{}.png.mcmeta", namespace, key));
+            if mcmeta_path.exists() {
+                let mcmeta =
+                    serde_json::from_reader::<_, mcmeta::McMeta>(File::open(mcmeta_path).unwrap())
+                        .unwrap();
+                if let Some(animation) = mcmeta.animation {
+                    // add to flipbook textures
+                    flipbook_textures.push(flipbook_textures::FlipbookTexture {
+                        flipbook_texture: texture_path.clone(),
+                        atlas_index: None,
+                        atlas_tile_variant: None,
+                        atlas_tile: texture_name.clone(),
+                        ticks_per_frame: animation.frametime,
+                        frames: vec![],
+                        replicate: 1,
+                        blend_frames: animation.interpolate,
+                    })
+                }
+            }
+
+            // add to terrain textures
             terrain_texture.texture_data.insert(
-                texture_name.clone(),
+                texture_name,
                 texture_atlas::TextureData {
                     textures: texture_atlas::Texture {
                         overlay_color: None,
@@ -250,65 +321,32 @@ impl Importer {
             &terrain_texture,
         )
         .unwrap();
+        serde_json::to_writer_pretty(
+            File::create(
+                self.resource_pack_path
+                    .join("textures/flipbook_textures.json"),
+            )
+            .unwrap(),
+            &flipbook_textures,
+        )
+        .unwrap();
     }
 
     fn write_geometries(&self) {
-        for (geometry_key, (elements, groups)) in &self.geometries {
+        for (geometry_key, elements) in &self.geometries {
             // generate list of bones and create references to element ids
-            let mut bones = vec![];
-            let mut bone_origins = vec![];
-            let mut bone_id_by_element_id = HashMap::new();
-            if groups.is_empty() {
-                bones.push(geometry::Bone {
-                    name: "root".to_string(),
-                    parent: None,
-                    pivot: None,
-                    rotation: None,
-                    mirror: None,
-                    inflate: None,
-                    cubes: vec![],
-                });
-                bone_origins.push(Vec3::ZERO);
-                for element_id in 0..elements.len() {
-                    bone_id_by_element_id.insert(element_id, 0);
-                }
-            } else {
-                let mut groups_ = vec![];
-                for group in groups {
-                    groups_.push((0, group));
-                }
-                while let Some((bone_id, group)) = groups_.pop() {
-                    match group {
-                        model::Group::Group {
-                            name,
-                            origin,
-                            children,
-                        } => {
-                            let bone_id = bones.len();
-                            bones.push(geometry::Bone {
-                                name: name.clone(),
-                                parent: None,
-                                pivot: None,
-                                rotation: None,
-                                mirror: None,
-                                inflate: None,
-                                cubes: vec![],
-                            });
-                            bone_origins.push(*origin);
-                            for child in children {
-                                groups_.push((bone_id, child));
-                            }
-                        }
-                        model::Group::Element(element_id) => {
-                            bone_id_by_element_id.insert(*element_id as usize, bone_id);
-                        }
-                    }
-                }
-            }
+            let mut bone = geometry::Bone {
+                name: geometry_key.clone(),
+                parent: None,
+                pivot: None,
+                rotation: None,
+                mirror: None,
+                inflate: None,
+                cubes: vec![],
+            };
 
             // add cubes to bones
-            for (element_id, element) in elements.iter().enumerate() {
-                let bone_id = *bone_id_by_element_id.get(&element_id).unwrap();
+            for element in elements {
                 let rotation;
                 let pivot;
                 if let Some(element_rotation) = &element.rotation {
@@ -326,7 +364,7 @@ impl Importer {
                     rotation = None;
                     pivot = None;
                 }
-                bones[bone_id].cubes.push(geometry::Cube {
+                bone.cubes.push(geometry::Cube {
                     origin: Some(Vec3::new(
                         -element.to.x + 8.0,
                         element.from.y,
@@ -340,18 +378,17 @@ impl Importer {
                     uv: element
                         .faces
                         .iter()
-                        .map(|(face_key, face)| {
+                        .map(|(&face_key, face)| {
                             let uv;
                             let uv_size;
                             if let Some(uv_from_to) = face.uv {
                                 uv = Vec2::new(uv_from_to[0], uv_from_to[1]);
-                                uv_size = Some(Vec2::new(
+                                uv_size = Vec2::new(
                                     uv_from_to[2] - uv_from_to[0],
                                     uv_from_to[3] - uv_from_to[1],
-                                ));
+                                );
                             } else {
-                                uv = Vec2::new(0.0, 0.0);
-                                uv_size = None;
+                                todo!()
                             }
                             (
                                 match face_key {
@@ -364,7 +401,7 @@ impl Importer {
                                 },
                                 geometry::Face {
                                     uv,
-                                    uv_size,
+                                    uv_size: Some(uv_size),
                                     material_instance: Some(
                                         face.texture.strip_prefix('#').unwrap().to_string(),
                                     ),
@@ -392,7 +429,7 @@ impl Importer {
                             texture_width: Some(16),
                             texture_height: Some(16),
                         },
-                        bones,
+                        bones: vec![bone],
                     }]),
                 },
             )
@@ -422,7 +459,7 @@ fn main() {
             .unwrap()
             .to_string();
         let block = importer.import_blockstate(format!("cb:{}", key));
-        /*serde_json::to_writer_pretty(
+        serde_json::to_writer_pretty(
             File::create(
                 importer
                     .behavior_pack_path
@@ -434,9 +471,9 @@ fn main() {
                 data: Data::Block(block),
             },
         )
-        .unwrap();*/
+        .unwrap();
     }
 
-    /*importer.write_textures();
-    importer.write_geometries();*/
+    importer.write_textures();
+    importer.write_geometries();
 }

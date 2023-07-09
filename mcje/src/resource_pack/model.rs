@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use glam::Vec3;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub struct Model {
     /// Loads a different model from the given path, in form of a resource
@@ -102,7 +102,7 @@ pub enum Axis {
     Z,
 }
 
-#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Hash, Copy, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum FaceKey {
     North,

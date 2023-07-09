@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use glam::Vec3;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use serde_with::{serde_as, EnumMap};
 
 #[serde_as]
@@ -43,7 +42,7 @@ pub struct Description {
     /// all possible values for that property (value). Learn how to use block
     /// properties in Block Properties and Permutations.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    pub properties: HashMap<String, Value>,
+    pub properties: HashMap<String, Property>,
 
     /// Specifies the menu category and group for the block, which determine
     /// where this block is placed in the inventory and crafting table container
@@ -51,6 +50,15 @@ pub struct Description {
     /// inventory or crafting table container screens.
     #[serde(default, skip_serializing_if = "MenuCategory::is_default")]
     pub menu_category: MenuCategory,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Property {
+    Bool(Vec<bool>),
+    Int(Vec<u32>),
+    IntRange { min: u32, max: u32 },
+    Enum(Vec<String>),
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]

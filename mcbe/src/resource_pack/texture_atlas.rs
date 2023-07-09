@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TextureAtlas {
-    pub num_mip_levels: u32,
-    pub padding: u32,
     pub resource_pack_name: String,
-    pub texture_data: HashMap<String, TextureData>,
     pub texture_name: String,
+    pub padding: u32,
+    pub num_mip_levels: u32,
+    pub texture_data: HashMap<String, TextureData>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -18,10 +18,10 @@ pub struct TextureData {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Texture {
+    pub path: String,
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub overlay_color: Option<String>,
-
-    pub path: String,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tint_color: Option<String>,

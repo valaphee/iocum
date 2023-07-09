@@ -6,7 +6,7 @@ use serde_with::{serde_as, OneOrMany};
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Block {
+pub enum BlockStates {
     /// Holds the names of all the variants of the block.
     Variants(HashMap<String, Variant>),
 

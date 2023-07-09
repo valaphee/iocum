@@ -69,7 +69,7 @@ pub struct MenuCategory {
     pub group: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Component {
     /// Defines the area of the block that collides with entities. If set to
     /// true, default values are used. If set to false, the block's collision
@@ -220,7 +220,7 @@ pub enum Component {
 /// north, south, east, west, or *. You can also give an instance the name of
 /// your choosing such as my_instance, and then assign it to a face by doing
 /// "north": "my_instance".
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MaterialInstance {
     /// Should this material have ambient occlusion applied when lighting? If
     /// true, shadows will be created around and underneath the block.
@@ -239,7 +239,7 @@ pub struct MaterialInstance {
     pub texture: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub enum RenderMethod {
     /// Used for a regular block texture without an alpha layer. Does not allow
     /// for transparency or translucency.

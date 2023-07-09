@@ -1,6 +1,7 @@
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap},
     fs::File,
+    path::PathBuf,
 };
 
 use glam::{Vec2, Vec3};
@@ -13,12 +14,92 @@ use iokum_mcbe::{
     pack::{Data, VersionedData},
     resource_pack::geometry,
 };
-use iokum_mcje::resource_pack::{block as src_block, model};
+use iokum_mcje::resource_pack::{block_states, model};
 
 fn main() {
-    let mut models = HashSet::new();
+    let behavior_pack_path = PathBuf::from(
+        r"C:\Users\valaphee\AppData\Local\Packages\Microsoft.MinecraftUWP_8wekyb3d8bbwe\LocalState\games\com.mojang\development_behavior_packs\MysteryMod",
+    );
+    let resource_pack_path = PathBuf::from(
+        r"C:\Users\valaphee\AppData\Local\Packages\Microsoft.MinecraftUWP_8wekyb3d8bbwe\LocalState\games\com.mojang\development_resource_packs\MysteryMod",
+    );
+
+    let mut geometry_by_model = HashMap::new();
+    let mut components_by_model = HashMap::<String, Vec<block::Component>>::new();
+    let mut model_to_components = |model_key: String| -> Vec<block::Component> {
+        // return cached model
+        if let Some(components) = components_by_model.get(&model_key) {
+            return components.clone();
+        }
+
+        // merge all models
+        let mut textures = HashMap::new();
+        let mut geometry_key = String::new();
+        let mut geometry_elements = vec![];
+        let mut geometry_groups = vec![];
+        let mut parent = Some(model_key.clone());
+        while let Some(ref parent_key) = parent {
+            let (namespace, key) = parent_key.split_once(':').unwrap();
+            let Ok(file) = File::open(format!(
+                r"C:\Users\valaphee\Downloads\assets\{}\models\{}.json",
+                namespace, key
+            )) else {
+                return vec![];
+            };
+
+            println!("Model: {}", parent_key);
+            let model: model::Model = serde_json::from_reader(file).unwrap();
+            for (key, value) in model.textures {
+                if let Entry::Vacant(entry) = textures.entry(key) {
+                    entry.insert(value);
+                }
+            }
+            if geometry_key.is_empty() && !model.elements.is_empty() {
+                geometry_key = parent_key.rsplit('/').next().unwrap().to_string();
+                if !geometry_by_model.contains_key(&geometry_key) {
+                    geometry_elements = model.elements;
+                    geometry_groups = model.groups;
+                }
+            }
+            parent = model.parent.clone();
+        }
+        textures.remove("particle");
+
+        // save geometry
+        if !geometry_elements.is_empty() {
+            geometry_by_model.insert(geometry_key.clone(), (geometry_elements, geometry_groups));
+        }
+
+        // save components
+        let components = vec![
+            block::Component::Geometry {
+                identifier: format!("geometry.{}", geometry_key),
+                bone_visibility: Default::default(),
+            },
+            block::Component::MaterialInstances(
+                textures
+                    .into_iter()
+                    .map(|(texture_key, texture)| {
+                        (
+                            texture_key,
+                            MaterialInstance {
+                                ambient_occlusion: true,
+                                face_dimming: true,
+                                render_method: RenderMethod::Opaque,
+                                texture: texture.rsplit('/').next().unwrap().to_string(),
+                            },
+                        )
+                    })
+                    .collect(),
+            ),
+        ];
+        components_by_model.insert(model_key, components.clone());
+
+        components
+    };
+
     for dir_entry in
-        std::fs::read_dir(r#"C:\Users\valaphee\Downloads\assets\cb\blockstates\"#).unwrap()
+        std::fs::read_dir(r"C:\Users\valaphee\Downloads\assets\cb\blockstates\").unwrap()
     {
         let dir_entry = dir_entry.unwrap();
         if !dir_entry.metadata().unwrap().is_file() {
@@ -32,190 +113,74 @@ fn main() {
             .unwrap()
             .to_string();
 
-        println!("Block: {}", dir_entry.file_name().into_string().unwrap());
-        block::Block {
+        println!("Block: {}", key);
+        let mut block = block::Block {
             description: block::Description {
-                identifier: key,
+                identifier: format!("cb:{}", key),
                 properties: Default::default(),
                 menu_category: None,
             },
             components: vec![],
-            permutations: match serde_json::from_reader::<_, src_block::Block>(
-                File::open(dir_entry.path()).unwrap(),
-            )
-            .unwrap()
-            {
-                src_block::Block::Variants(variants) => variants
-                    .into_iter()
-                    .map(|(variant_key, variant)| {
-                        let model = variant
-                            .0
-                            .into_iter()
-                            .max_by_key(|model| model.weight)
-                            .unwrap();
-                        models.insert(model.model);
-                        block::Permutation {
-                            condition: if variant_key.is_empty() {
-                                "".to_string()
-                            } else {
-                                variant_key
-                                    .split(',')
-                                    .map(|key_value| {
-                                        let (key, value) = key_value.split_once('=').unwrap();
-                                        format!(
-                                            "query.block_property('{}') == {}",
-                                            key,
-                                            match value {
-                                                "false" => "false".to_string(),
-                                                "true" => "true".to_string(),
-                                                value => value
-                                                    .parse::<u32>()
-                                                    .map_or(format!("'{}'", value), |_| value
-                                                        .to_string()),
-                                            }
-                                        )
-                                    })
-                                    .collect::<Vec<_>>()
-                                    .join(" && ")
-                            },
-                            components: vec![block::Component::Transformation {
-                                translation: [0.0, 0.0, 0.0],
-                                scale: [0.0, 0.0, 0.0],
-                                rotation: [model.x as f32, 360.0 - model.y as f32, 0.0],
-                            }],
-                        }
-                    })
-                    .collect(),
-                src_block::Block::Multipart(multipart) => multipart
-                    .into_iter()
-                    .map(|case| {
-                        let model = case
-                            .apply
-                            .into_iter()
-                            .max_by_key(|model| model.weight)
-                            .unwrap();
-                        models.insert(model.model);
-                        block::Permutation {
-                            condition: case.when.map_or("".to_string(), |when| match when {
-                                src_block::When::One(key_value) => {
-                                    let (key, value) = key_value.into_iter().next().unwrap();
-                                    format!(
-                                        "query.block_property('{}') == {}",
-                                        key,
-                                        match value.as_str() {
-                                            "false" => "false".to_string(),
-                                            "true" => "true".to_string(),
-                                            value => value
-                                                .parse::<u32>()
-                                                .map_or(format!("'{}'", value), |_| value
-                                                    .to_string()),
-                                        }
-                                    )
-                                }
-                                src_block::When::Many(key_value) => {
-                                    let (key, value) = key_value.into_iter().next().unwrap();
-                                    value
-                                        .into_iter()
-                                        .map(|key_value| {
-                                            let (key, value) =
-                                                key_value.into_iter().next().unwrap();
-                                            format!(
-                                                "query.block_property('{}') == {}",
-                                                key,
-                                                match value.as_str() {
-                                                    "false" => "false".to_string(),
-                                                    "true" => "true".to_string(),
-                                                    value => value
-                                                        .parse::<u32>()
-                                                        .map_or(format!("'{}'", value), |_| value
-                                                            .to_string()),
-                                                }
-                                            )
-                                        })
-                                        .collect::<Vec<_>>()
-                                        .join(match key.as_str() {
-                                            "AND" => " && ",
-                                            "OR" => " || ",
-                                            _ => todo!(),
-                                        })
-                                }
-                            }),
-                            components: vec![block::Component::Transformation {
-                                translation: [0.0, 0.0, 0.0],
-                                scale: [0.0, 0.0, 0.0],
-                                rotation: [model.x as f32, 360.0 - model.y as f32, 0.0],
-                            }],
-                        }
-                    })
-                    .collect(),
-            },
+            permutations: vec![],
         };
-    }
-
-    let mut components_by_model = HashMap::new();
-    let mut geometry_by_model = HashMap::new();
-    'models: for model_key in models {
-        let mut textures = HashMap::new();
-        let mut geometry_key = String::new();
-        let mut geometry_elements = vec![];
-        let mut geometry_groups = vec![];
-        let mut parent = Some(model_key.clone());
-        while let Some(ref parent_key) = parent {
-            let (namespace, key) = parent_key.split_once(':').unwrap();
-            let Ok(file) = File::open(format!(
-                r#"C:\Users\valaphee\Downloads\assets\{}\models\{}.json"#,
-                namespace, key
-            )) else {
-                continue 'models;
-            };
-
-            println!("Model: {}", parent_key);
-            let model: model::Model = serde_json::from_reader(file).unwrap();
-            for (key, value) in model.textures {
-                match textures.entry(key) {
-                    Entry::Vacant(entry) => {
-                        entry.insert(value);
-                    }
-                    _ => {}
-                }
-            }
-            if geometry_key.is_empty() && !model.elements.is_empty() {
-                geometry_key = format!("geometry.{}", parent_key.rsplit('/').next().unwrap());
-                if !geometry_by_model.contains_key(&geometry_key) {
-                    geometry_elements = model.elements;
-                    geometry_groups = model.groups;
-                }
-            }
-            parent = model.parent.clone();
-        }
-        components_by_model.insert(
-            model_key.rsplit('/').next().unwrap().to_string(),
-            vec![
-                block::Component::Geometry {
-                    identifier: geometry_key.clone(),
-                    bone_visibility: Default::default(),
-                },
-                block::Component::MaterialInstances(
-                    textures
+        match serde_json::from_reader::<_, block_states::BlockStates>(
+            File::open(dir_entry.path()).unwrap(),
+        )
+        .unwrap()
+        {
+            block_states::BlockStates::Variants(variants) => {
+                for (variant_key, variant) in variants {
+                    let model = variant
+                        .0
                         .into_iter()
-                        .map(|(texture_key, texture)| {
-                            (
-                                texture_key.strip_prefix('#').unwrap().to_string(),
-                                MaterialInstance {
-                                    ambient_occlusion: true,
-                                    face_dimming: true,
-                                    render_method: RenderMethod::Opaque,
-                                    texture,
-                                },
-                            )
-                        })
-                        .collect(),
-                ),
-            ],
-        );
-        if !geometry_elements.is_empty() {
-            geometry_by_model.insert(geometry_key, (geometry_elements, geometry_groups));
-        }
+                        .max_by_key(|model| model.weight)
+                        .unwrap();
+                    let mut components = model_to_components(model.model);
+                    components.push(block::Component::Transformation {
+                        translation: [0.0, 0.0, 0.0],
+                        scale: [0.0, 0.0, 0.0],
+                        rotation: [model.x as f32, 360.0 - model.y as f32, 0.0],
+                    });
+                    if variant_key.is_empty() {
+                        block.components = components;
+                    } else {
+                        let condition = variant_key
+                            .split(',')
+                            .map(|key_value| {
+                                let (key, value) = key_value.split_once('=').unwrap();
+                                format!(
+                                    "query.block_property('cb:{}') == {}",
+                                    key,
+                                    match value {
+                                        "false" => "false".to_string(),
+                                        "true" => "true".to_string(),
+                                        value => value
+                                            .parse::<u32>()
+                                            .map_or(format!("'{}'", value), |_| {
+                                                value.to_string()
+                                            }),
+                                    }
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                            .join(" && ");
+                        block.permutations.push(block::Permutation {
+                            condition,
+                            components,
+                        });
+                    }
+                }
+            }
+            block_states::BlockStates::Multipart(multipart) => for case in multipart {},
+        };
+        serde_json::to_writer_pretty(
+            File::create(behavior_pack_path.join(format!(r"blocks\{}.json", key))).unwrap(),
+            &VersionedData {
+                format_version: "1.19.30".to_string(),
+                data: Data::Block(block),
+            },
+        )
+        .unwrap();
     }
 
     for (geometry_key, (elements, groups)) in geometry_by_model {
@@ -318,7 +283,7 @@ fn main() {
                                 uv,
                                 uv_size,
                                 material_instance: Some(
-                                    face.texture.strip_prefix("#").unwrap().to_string(),
+                                    face.texture.strip_prefix('#').unwrap().to_string(),
                                 ),
                             },
                         )
@@ -328,10 +293,9 @@ fn main() {
         }
 
         serde_json::to_writer_pretty(
-            File::create(format!(
-                r#"C:\Users\valaphee\Downloads\resource_pack\models\entity\{}.geo.json"#,
-                geometry_key
-            ))
+            File::create(
+                resource_pack_path.join(format!(r"models\entity\{}.geo.json", geometry_key)),
+            )
             .unwrap(),
             &VersionedData {
                 format_version: "1.16.0".to_string(),

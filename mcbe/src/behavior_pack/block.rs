@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use glam::Vec3;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::{serde_as, EnumMap};
@@ -48,25 +49,43 @@ pub struct Description {
     /// where this block is placed in the inventory and crafting table container
     /// screens. If this field is omitted, the block will not appear in the
     /// inventory or crafting table container screens.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub menu_category: Option<MenuCategory>,
+    #[serde(default, skip_serializing_if = "MenuCategory::is_default")]
+    pub menu_category: MenuCategory,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct MenuCategory {
     /// Determines which category this block will be placed under in the
     /// inventory and crafting table container screens. Options are
     /// "construction", "nature", "equipment", "items", and "none". If omitted
     /// or "none" is specified, the block will not appear in the inventory or
     /// crafting table container screens.
-    pub category: String,
+    pub category: Category,
 
     /// Specifies the language file key that maps to which
     /// expandable/collapsible group this block will be a part of within a
     /// category. If this field is omitted, or there is no group whose name
     /// matches the loc string, this block will be placed standalone in the
     /// given category.
-    pub group: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
+}
+
+impl MenuCategory {
+    fn is_default(&self) -> bool {
+        matches!(self.category, Category::None)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum Category {
+    Construction,
+    Nature,
+    Equipment,
+    Items,
+    #[default]
+    None,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -81,12 +100,12 @@ pub enum Component {
         /// Minimal position of the bounds of the collision box. origin is
         /// specified as [x, y, z] and must be in the range (-8, 0, -8) to (8,
         /// 16, 8), inclusive.
-        origin: [f32; 3],
+        origin: Vec3,
 
         /// Size of each side of the collision box. Size is specified as [x, y,
         /// z]. origin + size must be in the range (-8, 0, -8) to (8, 16, 8),
         /// inclusive.
-        size: [f32; 3],
+        size: Vec3,
     },
 
     /// Describes the destructible by explosion properties for this block. If
@@ -195,7 +214,7 @@ pub enum Component {
     /// default values are used. Experimental toggles required: Holiday Creator
     /// Features (in format versions before 1.19.60).
     #[serde(rename = "minecraft:selection_box")]
-    SelectionBox { origin: [f32; 3], size: [f32; 3] },
+    SelectionBox { origin: Vec3, size: Vec3 },
 
     /// The block's translation around the center of the cube in degrees. The
     /// rotation order is [x, y, z]. Angles need to be in multiples of 90.
@@ -203,9 +222,9 @@ pub enum Component {
     /// versions before 1.19.80).
     #[serde(rename = "minecraft:transformation")]
     Transformation {
-        translation: [f32; 3],
-        scale: [f32; 3],
-        rotation: [f32; 3],
+        translation: Vec3,
+        scale: Vec3,
+        rotation: Vec3,
     },
 
     /// Specifies that a unit cube is to be used with tessellation.
@@ -240,6 +259,7 @@ pub struct MaterialInstance {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "snake_case")]
 pub enum RenderMethod {
     /// Used for a regular block texture without an alpha layer. Does not allow
     /// for transparency or translucency.

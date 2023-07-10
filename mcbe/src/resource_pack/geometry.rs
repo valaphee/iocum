@@ -114,12 +114,12 @@ pub struct Cube {
     /// This is an alternate per-face uv mapping which specifies each face of
     /// the cube.  Omitting a face will cause that face to not get drawn.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    pub uv: HashMap<FaceKey, Face>,
+    pub uv: HashMap<FaceEnum, Face>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
 #[serde(rename_all = "snake_case")]
-pub enum FaceKey {
+pub enum FaceEnum {
     North,
     South,
     East,

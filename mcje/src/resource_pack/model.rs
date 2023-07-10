@@ -73,7 +73,7 @@ pub struct Element {
 
     /// Holds all the faces of the cuboid. If a face is left out, it does not
     /// render.
-    pub faces: HashMap<FaceKey, Face>,
+    pub faces: HashMap<FaceEnum, Face>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -104,7 +104,7 @@ pub enum Axis {
 
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Hash, Copy, Clone)]
 #[serde(rename_all = "lowercase")]
-pub enum FaceKey {
+pub enum FaceEnum {
     North,
     South,
     East,
@@ -134,7 +134,7 @@ pub struct Face {
     /// block to use the light level from for lighting the face, and if unset,
     /// defaults to the side.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cull_face: Option<FaceKey>,
+    pub cull_face: Option<FaceEnum>,
 
     /// Rotates the texture by the specified number of degrees. Can be 0, 90,
     /// 180, or 270. Defaults to 0. Rotation does not affect which part of the

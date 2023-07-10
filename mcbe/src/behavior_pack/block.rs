@@ -32,6 +32,7 @@ pub struct Block {
 /// characteristics of a block that are applicable to all permutations of the
 /// block. The description MUST contain an identifier to identify the block by;
 /// the other fields are optional.
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Description {
     /// The identifier for this block. The name must include a namespace and
@@ -50,6 +51,16 @@ pub struct Description {
     /// inventory or crafting table container screens.
     #[serde(default, skip_serializing_if = "MenuCategory::is_default")]
     pub menu_category: MenuCategory,
+
+    /// Block traits are designed to be a shortcut for creators to use Vanilla
+    /// block states without needing to define and manage a series of events or
+    /// triggers on custom blocks. While custom states and permutations can be
+    /// used to set multiple variations of the same block (whether it's on/off,
+    /// is flammable, etc.), states that are exposed through traits allow you to
+    /// access the inherent data certain Vanilla blocks hold.
+    #[serde_as(as = "EnumMap")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub traits: Vec<Trait>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -100,6 +111,52 @@ pub enum Category {
     Items,
     #[default]
     None,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Trait {
+    /// placement_direction can add states containing information about the
+    /// player's rotation when the block is placed. For example, if a block
+    /// using placement_direction is placed while the player is facing south,
+    /// the state value will be "south". This will allow a data-driven block to
+    /// replicate the rotation behavior of a furnace, pumpkin, or terracotta
+    /// block. Note that while the block contains information, permutations will
+    /// need to be configured to determine how the block is placed/looks/acts.
+    /// There are two states that can be included with this trait:
+    /// - minecraft:cardinal_direction is a 4-value state containing the
+    ///   cardinal-facing direction of the player when the block was placed. THe
+    ///   values for this state are 'north', 'south', 'east', and 'west'.
+    /// - minecraft:facing_direction is a 6-value state containing the overall
+    ///   direction of the player when the block was placed. The values for this
+    ///   state are 'down', 'up', 'north', 'south', 'east', and 'west'.
+    /// This trait can also be configured with a 'y_rotation_offset' where an
+    /// axis-aligned angle may be specified via degree (e.g. 90.0). This causes
+    /// the state within the trait to store a rotated value. In other words,
+    /// with a rotation offset of 90.0, a block placed when the player is facing
+    /// south would have a state of 'east'. This rotation offset only applies to
+    /// the horizontal state values (north, south, east, west).
+    #[serde(rename = "minecraft:placement_direction")]
+    PlacementDirection {
+        enabled_states: Vec<String>,
+        y_rotation_offset: f32,
+    },
+    /// placement_position contains information about where the player placed
+    /// the block. This allows a block to replicate the upside-down placement of
+    /// slabs and stairs, as well as the attachment behavior of torches and
+    /// vines. There are two states that can be included with this trait:
+    /// - minecraft:block_face is a 6-value state representing the face on which
+    ///   the block was placed. Values for this state are 'up', 'down', 'north',
+    ///   'south', 'east', and 'west'. For example, if a block using the
+    ///   minecraft:block_face is placed on the south face of a neighboring
+    ///   block, the state value will be 'south'.
+    /// - minecraft:vertical_half is a 2-value state specifying whether a block
+    ///   was placed in the top or bottom half of a block. The values for this
+    ///   state are 'bottom' and 'top'. For blocks using
+    ///   minecraft:vertical_half, if the block is placed on the 'down' face of
+    ///   a block or above the midline of a horizontal face, the state value
+    ///   will be 'top'.
+    #[serde(rename = "minecraft:placement_position")]
+    PlacementPosition { enabled_states: Vec<String> },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

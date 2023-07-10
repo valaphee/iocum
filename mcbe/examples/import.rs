@@ -69,6 +69,7 @@ impl Importer {
                     category: block::Category::Construction,
                     group: None,
                 },
+                traits: vec![],
             },
             components: vec![],
             permutations: vec![],

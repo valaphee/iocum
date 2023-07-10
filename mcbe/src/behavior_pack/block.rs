@@ -57,8 +57,14 @@ pub struct Description {
 pub enum Property {
     Bool(Vec<bool>),
     Int(Vec<u32>),
-    IntRange { min: u32, max: u32 },
+    IntRange { values: Range },
     Enum(Vec<String>),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Range {
+    pub min: u32,
+    pub max: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]

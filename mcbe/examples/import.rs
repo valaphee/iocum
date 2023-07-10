@@ -45,8 +45,8 @@ impl Importer {
     }
 
     fn import_blockstate(&mut self, blockstate: String) -> block::Block {
-        let (namespace, key) = blockstate.split_once(':').unwrap();
         println!("Importing block: {}", blockstate);
+        let (namespace, key) = blockstate.split_once(':').unwrap();
         let mut block = block::Block {
             description: block::Description {
                 identifier: blockstate.clone(),
@@ -71,11 +71,15 @@ impl Importer {
             block_state::BlockState::Variants(variants) => {
                 let single_variant = variants.len() == 1;
                 for (variant_key, variant) in variants {
-                    // collect properties (unordered)
+                    // collect properties (only when not known beforehand)
                     if !variant_key.is_empty() {
                         for key_value in variant_key.split(',') {
                             let (key, value) = key_value.split_once('=').unwrap();
-                            match block.description.properties.entry(format!("cb:{}", key)) {
+                            match block
+                                .description
+                                .properties
+                                .entry(format!("{}:{}", namespace, key))
+                            {
                                 Entry::Occupied(mut entry) => match entry.get_mut() {
                                     Property::Bool(values) => {
                                         let value = value.parse().unwrap();
@@ -141,7 +145,8 @@ impl Importer {
                             .map(|key_value| {
                                 let (key, value) = key_value.split_once('=').unwrap();
                                 format!(
-                                    "query.block_property('cb:{}') == {}",
+                                    "query.block_property('{}:{}') == {}",
+                                    namespace,
                                     key,
                                     match value {
                                         "false" => "false".to_owned(),
@@ -165,10 +170,32 @@ impl Importer {
             }
             block_state::BlockState::Multipart(multipart) => for _case in multipart {},
         };
+
+        // sort property values (only when not known beforehand)
+        for property in block.description.properties.values_mut() {
+            match property {
+                Property::Bool(values) => {
+                    values.sort();
+                }
+                Property::Int(values) => {
+                    *property = Property::IntRange {
+                        values: block::Range {
+                            min: *values.iter().min().unwrap(),
+                            max: *values.iter().max().unwrap(),
+                        },
+                    }
+                }
+                Property::Enum(values) => {
+                    values.sort();
+                }
+                _ => unreachable!(),
+            }
+        }
+
         block
     }
 
-    fn import_model(&mut self, model: String, block_key: Option<String>) -> Vec<block::Component> {
+    fn import_model(&mut self, model: String, block: Option<String>) -> Vec<block::Component> {
         // return cached model
         if let Some(components) = self.components.get(&model) {
             return components.clone();
@@ -194,13 +221,17 @@ impl Importer {
             if ambient_occlusion.is_none() {
                 ambient_occlusion = Some(model.ambient_occlusion)
             }
-            for (key, value) in model.textures {
-                if let Entry::Vacant(entry) = textures.entry(key) {
-                    entry.insert(value);
+            for (texture_key, texture) in model.textures {
+                if let Entry::Vacant(entry) = textures.entry(texture_key) {
+                    entry.insert(if texture.starts_with('#') || texture.contains(':') {
+                        texture
+                    } else {
+                        format!("minecraft:{}", texture)
+                    });
                 }
             }
             if geometry_key.is_empty() && !model.elements.is_empty() {
-                geometry_key = parent.rsplit('/').next().unwrap().to_owned();
+                geometry_key = Self::convert_name(parent);
                 if !self.geometries.contains_key(&geometry_key) {
                     geometry_elements = model.elements;
                 }
@@ -212,7 +243,7 @@ impl Importer {
         if !geometry_elements.is_empty() {
             // check if it's a unit cube and use built-in model
             if geometry_elements.len() == 1 {
-                if let Some(block_key) = block_key {
+                if let Some(block_key) = block {
                     let element = geometry_elements.first().unwrap();
                     if element.from == Vec3::ZERO && element.to == Vec3::new(16.0, 16.0, 16.0) {
                         let faces = &element.faces;
@@ -279,7 +310,7 @@ impl Importer {
                         self.blocks.insert(
                             block_key,
                             blocks::Block {
-                                isotropic: Default::default(),
+                                isotropic: None,
                                 textures: Some(
                                     if north_face == south_face
                                         && north_face == east_face
@@ -287,25 +318,15 @@ impl Importer {
                                     {
                                         if north_face == up_face && up_face == down_face {
                                             self.textures.insert(north_face.to_owned());
-                                            blocks::Face::CubeAll(
-                                                north_face.rsplit('/').next().unwrap().to_owned(),
-                                            )
+                                            blocks::Face::CubeAll(Self::convert_name(north_face))
                                         } else {
                                             self.textures.insert(up_face.to_owned());
                                             self.textures.insert(down_face.to_owned());
                                             self.textures.insert(north_face.to_owned());
                                             blocks::Face::CubeBottomTop {
-                                                up: up_face.rsplit('/').next().unwrap().to_owned(),
-                                                down: down_face
-                                                    .rsplit('/')
-                                                    .next()
-                                                    .unwrap()
-                                                    .to_owned(),
-                                                side: north_face
-                                                    .rsplit('/')
-                                                    .next()
-                                                    .unwrap()
-                                                    .to_owned(),
+                                                up: Self::convert_name(up_face),
+                                                down: Self::convert_name(down_face),
+                                                side: Self::convert_name(north_face),
                                             }
                                         }
                                     } else {
@@ -316,24 +337,16 @@ impl Importer {
                                         self.textures.insert(east_face.to_owned());
                                         self.textures.insert(west_face.to_owned());
                                         blocks::Face::Cube {
-                                            up: up_face.rsplit('/').next().unwrap().to_owned(),
-                                            down: down_face.rsplit('/').next().unwrap().to_owned(),
-                                            north: north_face
-                                                .rsplit('/')
-                                                .next()
-                                                .unwrap()
-                                                .to_owned(),
-                                            south: south_face
-                                                .rsplit('/')
-                                                .next()
-                                                .unwrap()
-                                                .to_owned(),
-                                            east: east_face.rsplit('/').next().unwrap().to_owned(),
-                                            west: west_face.rsplit('/').next().unwrap().to_owned(),
+                                            up: Self::convert_name(up_face),
+                                            down: Self::convert_name(down_face),
+                                            north: Self::convert_name(north_face),
+                                            south: Self::convert_name(south_face),
+                                            east: Self::convert_name(east_face),
+                                            west: Self::convert_name(west_face),
                                         }
                                     },
                                 ),
-                                carried_textures: Default::default(),
+                                carried_textures: None,
                                 brightness_gamma: 1.0,
                                 sound: None,
                             },
@@ -375,7 +388,7 @@ impl Importer {
                 textures
                     .into_iter()
                     .map(|(texture_key, texture)| {
-                        let texture_name = texture.rsplit('/').next().unwrap().to_owned();
+                        let texture_name = Self::convert_name(&texture);
                         self.textures.insert(texture);
                         (
                             texture_key,
@@ -477,6 +490,7 @@ impl Importer {
                 });
             }
 
+            // write geometry
             serde_json::to_writer_pretty(
                 File::create(
                     self.resource_pack_path
@@ -514,11 +528,11 @@ impl Importer {
         let mut flipbook_textures: Vec<flipbook_textures::FlipbookTexture> = vec![];
         for texture in &self.textures {
             println!("Writing texture: {}", texture);
-            let (namespace, key) = texture
-                .split_once(':')
-                .unwrap_or(("minecraft", texture.as_str()));
-            let texture_name = texture.rsplit('/').next().unwrap().to_owned();
+            let (namespace, key) = texture.split_once(':').unwrap();
+            let texture_name = Self::convert_name(texture);
             let texture_path = format!("textures/blocks/{}.png", texture_name);
+
+            // copy texture
             std::fs::copy(
                 self.asset_path
                     .join(format!("{}/textures/{}.png", namespace, key)),
@@ -563,6 +577,8 @@ impl Importer {
                 },
             );
         }
+
+        // write terrain textures
         serde_json::to_writer_pretty(
             File::create(
                 self.resource_pack_path
@@ -572,6 +588,8 @@ impl Importer {
             &terrain_texture,
         )
         .unwrap();
+
+        // write flipbook textures
         serde_json::to_writer_pretty(
             File::create(
                 self.resource_pack_path
@@ -593,6 +611,16 @@ impl Importer {
             },
         )
         .unwrap();
+    }
+
+    fn convert_name(name: &str) -> String {
+        name.split_once(':')
+            .unwrap()
+            .1
+            .split_once('/')
+            .unwrap()
+            .1
+            .replace('/', "_")
     }
 }
 
@@ -617,6 +645,8 @@ fn main() {
             .unwrap()
             .to_owned();
         let block = importer.import_blockstate(format!("cb:{}", key));
+
+        // write block
         serde_json::to_writer_pretty(
             File::create(
                 importer
@@ -625,7 +655,7 @@ fn main() {
             )
             .unwrap(),
             &VersionedData {
-                format_version: "1.19.30".to_owned(),
+                format_version: "1.20.0".to_owned(),
                 data: Data::Block(block),
             },
         )

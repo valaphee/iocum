@@ -23,10 +23,10 @@ struct Importer {
 
     // cache
     components: HashMap<String, Vec<block::Component>>,
-    geometries: HashSet<String>,
     textures: HashMap<String, block::RenderMethod>,
 
     blocks: HashMap<String, blocks::Block>,
+    geometries: HashMap<String, geometry::Geometry>,
     texture_atlas: texture_atlas::TextureAtlas,
     flipbook_textures: Vec<flipbook_textures::FlipbookTexture>,
 }
@@ -43,10 +43,10 @@ impl Importer {
             asset_path: asset_path.as_ref().to_path_buf(),
             behavior_pack_path: behavior_pack_path.as_ref().to_path_buf(),
             resource_pack_path: resource_pack_path.as_ref().to_path_buf(),
-            blocks: Default::default(),
             components: Default::default(),
-            geometries: Default::default(),
             textures: Default::default(),
+            blocks: Default::default(),
+            geometries: Default::default(),
             texture_atlas: texture_atlas::TextureAtlas {
                 resource_pack_name: "cb".to_string(),
                 texture_name: "atlas.terrain".to_string(),
@@ -422,7 +422,7 @@ impl Importer {
             }
             if geometry.is_empty() && !model.elements.is_empty() {
                 geometry = Self::sanitize(&parent);
-                if !self.geometries.contains(&geometry) {
+                if !self.geometries.contains_key(&geometry) {
                     elements = model.elements;
                 }
             }
@@ -634,31 +634,20 @@ impl Importer {
                 });
             }
 
-            // write geometry
-            serde_json::to_writer_pretty(
-                File::create(
-                    self.resource_pack_path
-                        .join(format!("models/entity/{}.geo.json", geometry)),
-                )
-                .unwrap(),
-                &VersionedData {
-                    format_version: "1.16.0".to_owned(),
-                    data: Data::Geometry(vec![geometry::Geometry {
-                        description: geometry::Description {
-                            identifier: format!("geometry.{}", geometry),
-                            visible_bounds_width: None,
-                            visible_bounds_height: None,
-                            visible_bounds_offset: None,
-                            texture_width: Some(16),
-                            texture_height: Some(16),
-                        },
-                        bones: vec![bone],
-                    }]),
+            self.geometries.insert(
+                geometry.clone(),
+                geometry::Geometry {
+                    description: geometry::Description {
+                        identifier: format!("geometry.{}", geometry),
+                        visible_bounds_width: None,
+                        visible_bounds_height: None,
+                        visible_bounds_offset: None,
+                        texture_width: Some(16),
+                        texture_height: Some(16),
+                    },
+                    bones: vec![bone],
                 },
-            )
-            .unwrap();
-
-            self.geometries.insert(geometry.clone());
+            );
         }
 
         // set default texture, remove textures which are the same as the default,
@@ -847,56 +836,6 @@ impl Importer {
         (texture_name, render_method)
     }
 
-    fn write_texture_index(&self) {
-        println!("Writing texture index...");
-
-        // write textures
-        serde_json::to_writer_pretty(
-            File::create(self.resource_pack_path.join("textures/textures_list.json")).unwrap(),
-            &self
-                .texture_atlas
-                .texture_data
-                .values()
-                .flat_map(|textures| textures.textures.iter().map(|texture| &texture.path))
-                .collect::<Vec<_>>(),
-        )
-        .unwrap();
-
-        // write textures atlas
-        serde_json::to_writer_pretty(
-            File::create(
-                self.resource_pack_path
-                    .join("textures/terrain_texture.json"),
-            )
-            .unwrap(),
-            &self.texture_atlas,
-        )
-        .unwrap();
-
-        // write flipbook textures
-        serde_json::to_writer_pretty(
-            File::create(
-                self.resource_pack_path
-                    .join("textures/flipbook_textures.json"),
-            )
-            .unwrap(),
-            &self.flipbook_textures,
-        )
-        .unwrap();
-    }
-
-    fn write_block_index(&self) {
-        println!("Writing block index...");
-        serde_json::to_writer_pretty(
-            File::create(self.resource_pack_path.join("blocks.json")).unwrap(),
-            &blocks::Blocks {
-                format_version: "1.19.30".to_owned(),
-                blocks: self.blocks.clone(),
-            },
-        )
-        .unwrap();
-    }
-
     fn sanitize(name: &str) -> String {
         name.split_once(':')
             .unwrap()
@@ -946,6 +885,71 @@ fn main() {
         .unwrap();
     }
 
-    importer.write_texture_index();
-    importer.write_block_index();
+    // write blocks
+    serde_json::to_writer_pretty(
+        File::create(importer.resource_pack_path.join("blocks.json")).unwrap(),
+        &blocks::Blocks {
+            format_version: "1.19.30".to_owned(),
+            blocks: importer.blocks,
+        },
+    )
+    .unwrap();
+
+    // write geometries
+    for (geometry_key, geometry) in importer.geometries {
+        serde_json::to_writer_pretty(
+            File::create(
+                importer
+                    .resource_pack_path
+                    .join(format!("models/entity/{}.geo.json", geometry_key)),
+            )
+            .unwrap(),
+            &VersionedData {
+                format_version: "1.16.0".to_owned(),
+                data: Data::Geometry(vec![geometry]),
+            },
+        )
+        .unwrap();
+    }
+
+    // write texture list
+    serde_json::to_writer_pretty(
+        File::create(
+            importer
+                .resource_pack_path
+                .join("textures/textures_list.json"),
+        )
+        .unwrap(),
+        &importer
+            .texture_atlas
+            .texture_data
+            .values()
+            .flat_map(|textures| textures.textures.iter().map(|texture| &texture.path))
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
+
+    // write texture atlas
+    serde_json::to_writer_pretty(
+        File::create(
+            importer
+                .resource_pack_path
+                .join("textures/terrain_texture.json"),
+        )
+        .unwrap(),
+        &importer.texture_atlas,
+    )
+    .unwrap();
+
+    // write flipbook textures
+    serde_json::to_writer_pretty(
+        File::create(
+            importer
+                .resource_pack_path
+                .join("textures/flipbook_textures.json"),
+        )
+        .unwrap(),
+        &importer.flipbook_textures,
+    )
+    .unwrap();
 }

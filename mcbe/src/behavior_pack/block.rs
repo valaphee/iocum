@@ -91,7 +91,7 @@ impl MenuCategory {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Category {
     Construction,
@@ -272,7 +272,7 @@ pub struct MaterialInstance {
     pub texture: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RenderMethod {
     /// Used for a regular block texture without an alpha layer. Does not allow

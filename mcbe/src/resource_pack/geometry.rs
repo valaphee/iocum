@@ -117,7 +117,7 @@ pub struct Cube {
     pub uv: HashMap<FaceEnum, Face>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FaceEnum {
     North,

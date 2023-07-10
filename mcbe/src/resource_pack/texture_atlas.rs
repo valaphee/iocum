@@ -1,6 +1,11 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    fmt::{Display, Formatter},
+    str::FromStr,
+};
 
 use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, DisplayFromStr, OneOrMany, PickFirst};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TextureAtlas {
@@ -11,9 +16,11 @@ pub struct TextureAtlas {
     pub texture_data: HashMap<String, TextureData>,
 }
 
+#[serde_as]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TextureData {
-    pub textures: Texture,
+    #[serde_as(as = "OneOrMany<PickFirst<(DisplayFromStr, _)>>")]
+    pub textures: Vec<Texture>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -28,6 +35,29 @@ pub struct Texture {
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub variations: Vec<Variation>,
+}
+
+impl Display for Texture {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.overlay_color.is_some() || self.tint_color.is_some() || !self.variations.is_empty()
+        {
+            return Err(Default::default());
+        }
+        write!(f, "{}", self.path)
+    }
+}
+
+impl FromStr for Texture {
+    type Err = std::fmt::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Texture {
+            path: s.to_string(),
+            overlay_color: None,
+            tint_color: None,
+            variations: vec![],
+        })
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -15,3 +15,6 @@ members = [
     "tls",
 ]
 resolver = "2"
+
+[patch.crates-io]
+serde_json = { git = "https://github.com/valaphee/serde_json.git" }

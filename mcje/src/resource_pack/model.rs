@@ -94,7 +94,7 @@ pub struct Rotation {
     pub rescale: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Axis {
     X,
@@ -102,7 +102,7 @@ pub enum Axis {
     Z,
 }
 
-#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Hash, Copy, Clone)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum FaceEnum {
     North,

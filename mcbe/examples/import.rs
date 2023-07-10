@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap},
     fs::File,
     path::{Path, PathBuf},
 };
@@ -7,24 +7,26 @@ use std::{
 use glam::{Vec2, Vec3};
 
 use iokum_mcbe::{
-    behavior_pack::{
-        block,
-        block::{MaterialInstance, Property, RenderMethod},
-    },
+    behavior_pack::block,
     pack::{Data, VersionedData},
     resource_pack::{blocks, flipbook_textures, geometry, texture_atlas},
 };
 use iokum_mcje::resource_pack::{block_state, mcmeta, model};
 
 struct Importer {
+    texture_mappings: HashMap<String, HashMap<String, String>>,
+    vanilla_texture_atlas: texture_atlas::TextureAtlas,
+
     asset_path: PathBuf,
     behavior_pack_path: PathBuf,
     resource_pack_path: PathBuf,
 
+    blocks: HashMap<String, blocks::Block>,
     components: HashMap<String, Vec<block::Component>>,
     geometries: HashMap<String, Vec<model::Element>>,
-    textures: HashSet<String>,
-    blocks: HashMap<String, blocks::Block>,
+    textures: HashMap<String, block::RenderMethod>,
+    texture_atlas: texture_atlas::TextureAtlas,
+    flipbook_textures: Vec<flipbook_textures::FlipbookTexture>,
 }
 
 impl Importer {
@@ -34,13 +36,23 @@ impl Importer {
         resource_pack_path: impl AsRef<Path>,
     ) -> Self {
         Self {
+            texture_mappings: serde_json::from_reader(File::open("textures.json").unwrap()).unwrap(),
+            vanilla_texture_atlas: serde_json::from_reader(File::open(r"C:\Program Files\WindowsApps\Microsoft.MinecraftUWP_1.20.102.0_x64__8wekyb3d8bbwe\data\resource_packs\vanilla\textures\terrain_texture.json").unwrap()).unwrap(),
             asset_path: asset_path.as_ref().to_path_buf(),
             behavior_pack_path: behavior_pack_path.as_ref().to_path_buf(),
             resource_pack_path: resource_pack_path.as_ref().to_path_buf(),
-            geometries: Default::default(),
-            components: Default::default(),
-            textures: Default::default(),
             blocks: Default::default(),
+            components: Default::default(),
+            geometries: Default::default(),
+            textures: Default::default(),
+            texture_atlas: texture_atlas::TextureAtlas {
+                resource_pack_name: "cb".to_string(),
+                texture_name: "atlas.terrain".to_string(),
+                padding: 0,
+                num_mip_levels: 0,
+                texture_data: Default::default(),
+            },
+            flipbook_textures: vec![],
         }
     }
 
@@ -70,9 +82,22 @@ impl Importer {
         {
             block_state::BlockState::Variants(variants) => {
                 // TODO: only useful for blocks with one model
-                let first_model = variants.values().next().unwrap().0.iter().max_by_key(|model| model.weight).unwrap();
+                let first_model = variants
+                    .values()
+                    .next()
+                    .unwrap()
+                    .0
+                    .iter()
+                    .max_by_key(|model| model.weight)
+                    .unwrap();
                 let single_model = variants.values().all(|variant| {
-                    first_model.model == variant.0.iter().max_by_key(|model| model.weight).unwrap().model
+                    first_model.model
+                        == variant
+                            .0
+                            .iter()
+                            .max_by_key(|model| model.weight)
+                            .unwrap()
+                            .model
                 });
                 if single_model {
                     block.components = self.import_model(
@@ -85,30 +110,30 @@ impl Importer {
                     );
                 }
 
-                for (variant_key, variant) in variants {
+                for (variant_state, variant) in variants {
                     // collect properties (only when not known beforehand)
-                    if !variant_key.is_empty() {
-                        for key_value in variant_key.split(',') {
-                            let (key, value) = key_value.split_once('=').unwrap();
+                    if !variant_state.is_empty() {
+                        for property in variant_state.split(',') {
+                            let (key, value) = property.split_once('=').unwrap();
                             match block
                                 .description
                                 .properties
                                 .entry(format!("{}:{}", namespace, key))
                             {
                                 Entry::Occupied(mut entry) => match entry.get_mut() {
-                                    Property::Bool(values) => {
+                                    block::Property::Bool(values) => {
                                         let value = value.parse().unwrap();
                                         if !values.contains(&value) {
                                             values.push(value)
                                         }
                                     }
-                                    Property::Int(values) => {
+                                    block::Property::Int(values) => {
                                         let value = value.parse().unwrap();
                                         if !values.contains(&value) {
                                             values.push(value)
                                         }
                                     }
-                                    Property::Enum(values) => {
+                                    block::Property::Enum(values) => {
                                         let value = value.to_owned();
                                         if !values.contains(&value) {
                                             values.push(value)
@@ -118,11 +143,11 @@ impl Importer {
                                 },
                                 Entry::Vacant(entry) => {
                                     entry.insert(if let Ok(value) = value.parse::<bool>() {
-                                        Property::Bool(vec![value])
+                                        block::Property::Bool(vec![value])
                                     } else if let Ok(value) = value.parse::<u32>() {
-                                        Property::Int(vec![value])
+                                        block::Property::Int(vec![value])
                                     } else {
-                                        Property::Enum(vec![value.to_owned()])
+                                        block::Property::Enum(vec![value.to_owned()])
                                     });
                                 }
                             }
@@ -138,10 +163,7 @@ impl Importer {
                     let mut components = if single_model {
                         vec![]
                     } else {
-                        self.import_model(
-                            model.model,
-                            None,
-                        )
+                        self.import_model(model.model, None)
                     };
                     if model.x != 0 || model.y != 0 {
                         components.push(block::Component::Transformation {
@@ -152,13 +174,13 @@ impl Importer {
                     }
 
                     // either add to components or add new permutation
-                    if variant_key.is_empty() {
+                    if variant_state.is_empty() {
                         block.components.append(&mut components);
                     } else {
-                        let condition = variant_key
+                        let condition = variant_state
                             .split(',')
-                            .map(|key_value| {
-                                let (key, value) = key_value.split_once('=').unwrap();
+                            .map(|property| {
+                                let (key, value) = property.split_once('=').unwrap();
                                 format!(
                                     "query.block_property('{}:{}') == {}",
                                     namespace,
@@ -189,18 +211,18 @@ impl Importer {
         // sort property values (only when not known beforehand)
         for property in block.description.properties.values_mut() {
             match property {
-                Property::Bool(values) => {
+                block::Property::Bool(values) => {
                     values.sort();
                 }
-                Property::Int(values) => {
-                    *property = Property::IntRange {
+                block::Property::Int(values) => {
+                    *property = block::Property::IntRange {
                         values: block::Range {
                             min: *values.iter().min().unwrap(),
                             max: *values.iter().max().unwrap(),
                         },
                     }
                 }
-                Property::Enum(values) => {
+                block::Property::Enum(values) => {
                     values.sort();
                 }
                 _ => unreachable!(),
@@ -208,7 +230,9 @@ impl Importer {
         }
 
         // remove empty permutations
-        block.permutations.retain(|permutation| !permutation.components.is_empty());
+        block
+            .permutations
+            .retain(|permutation| !permutation.components.is_empty());
 
         block
     }
@@ -222,10 +246,10 @@ impl Importer {
         // merge all models
         let mut ambient_occlusion = None;
         let mut textures = HashMap::new();
-        let mut geometry_key = String::new();
+        let mut geometry = String::new();
         let mut geometry_elements = vec![];
-        let mut parent_ = Some(model.clone());
-        while let Some(parent) = &parent_ {
+        let mut parent = model.clone();
+        loop {
             let (namespace, key) = parent.split_once(':').unwrap();
             let Ok(file) = File::open(
                 self.asset_path
@@ -239,8 +263,8 @@ impl Importer {
             if ambient_occlusion.is_none() {
                 ambient_occlusion = Some(model.ambient_occlusion)
             }
-            for (texture_key, texture) in model.textures {
-                if let Entry::Vacant(entry) = textures.entry(texture_key) {
+            for (texture_ref, texture) in model.textures {
+                if let Entry::Vacant(entry) = textures.entry(texture_ref) {
                     entry.insert(if texture.starts_with('#') || texture.contains(':') {
                         texture
                     } else {
@@ -248,13 +272,17 @@ impl Importer {
                     });
                 }
             }
-            if geometry_key.is_empty() && !model.elements.is_empty() {
-                geometry_key = Self::convert_name(parent);
-                if !self.geometries.contains_key(&geometry_key) {
+            if geometry.is_empty() && !model.elements.is_empty() {
+                geometry = Self::sanitize(&parent);
+                if !self.geometries.contains_key(&geometry) {
                     geometry_elements = model.elements;
                 }
             }
-            parent_ = model.parent.clone();
+
+            let Some(next_parent) = model.parent.clone() else {
+                break;
+            };
+            parent = next_parent;
         }
 
         // save geometry
@@ -265,156 +293,173 @@ impl Importer {
                     let element = geometry_elements.first().unwrap();
                     if element.from == Vec3::ZERO && element.to == Vec3::new(16.0, 16.0, 16.0) {
                         let faces = &element.faces;
-                        let north_face = textures
-                            .get(
-                                faces
-                                    .get(&model::FaceEnum::North)
-                                    .unwrap()
-                                    .texture
-                                    .strip_prefix('#')
-                                    .unwrap(),
-                            )
-                            .unwrap();
-                        let south_face = textures
-                            .get(
-                                faces
-                                    .get(&model::FaceEnum::South)
-                                    .unwrap()
-                                    .texture
-                                    .strip_prefix('#')
-                                    .unwrap(),
-                            )
-                            .unwrap();
-                        let east_face = textures
-                            .get(
-                                faces
-                                    .get(&model::FaceEnum::East)
-                                    .unwrap()
-                                    .texture
-                                    .strip_prefix('#')
-                                    .unwrap(),
-                            )
-                            .unwrap();
-                        let west_face = textures
-                            .get(
-                                faces
-                                    .get(&model::FaceEnum::West)
-                                    .unwrap()
-                                    .texture
-                                    .strip_prefix('#')
-                                    .unwrap(),
-                            )
-                            .unwrap();
-                        let up_face = textures
-                            .get(
-                                faces
-                                    .get(&model::FaceEnum::Up)
-                                    .unwrap()
-                                    .texture
-                                    .strip_prefix('#')
-                                    .unwrap(),
-                            )
-                            .unwrap();
-                        let down_face = textures
-                            .get(
-                                faces
-                                    .get(&model::FaceEnum::Down)
-                                    .unwrap()
-                                    .texture
-                                    .strip_prefix('#')
-                                    .unwrap(),
-                            )
-                            .unwrap();
-                        self.blocks.insert(
-                            block_key,
-                            blocks::Block {
-                                isotropic: None,
-                                textures: Some(
-                                    if north_face == south_face
-                                        && north_face == east_face
-                                        && north_face == west_face
-                                    {
-                                        if north_face == up_face && up_face == down_face {
-                                            self.textures.insert(north_face.to_owned());
-                                            blocks::Face::CubeAll(Self::convert_name(north_face))
-                                        } else {
-                                            self.textures.insert(up_face.to_owned());
-                                            self.textures.insert(down_face.to_owned());
-                                            self.textures.insert(north_face.to_owned());
-                                            blocks::Face::CubeBottomTop {
-                                                up: Self::convert_name(up_face),
-                                                down: Self::convert_name(down_face),
-                                                side: Self::convert_name(north_face),
-                                            }
-                                        }
-                                    } else {
-                                        self.textures.insert(up_face.to_owned());
-                                        self.textures.insert(down_face.to_owned());
-                                        self.textures.insert(north_face.to_owned());
-                                        self.textures.insert(south_face.to_owned());
-                                        self.textures.insert(east_face.to_owned());
-                                        self.textures.insert(west_face.to_owned());
-                                        blocks::Face::Cube {
-                                            up: Self::convert_name(up_face),
-                                            down: Self::convert_name(down_face),
-                                            north: Self::convert_name(north_face),
-                                            south: Self::convert_name(south_face),
-                                            east: Self::convert_name(east_face),
-                                            west: Self::convert_name(west_face),
-                                        }
-                                    },
-                                ),
-                                carried_textures: None,
-                                brightness_gamma: 1.0,
-                                sound: None,
-                            },
+                        let (north, north_render_method) = self.import_texture(
+                            textures
+                                .get(
+                                    faces
+                                        .get(&model::FaceEnum::North)
+                                        .unwrap()
+                                        .texture
+                                        .strip_prefix('#')
+                                        .unwrap(),
+                                )
+                                .unwrap(),
                         );
-                        return vec![];
+                        let (south, south_render_method) = self.import_texture(
+                            textures
+                                .get(
+                                    faces
+                                        .get(&model::FaceEnum::South)
+                                        .unwrap()
+                                        .texture
+                                        .strip_prefix('#')
+                                        .unwrap(),
+                                )
+                                .unwrap(),
+                        );
+                        let (east, east_render_method) = self.import_texture(
+                            textures
+                                .get(
+                                    faces
+                                        .get(&model::FaceEnum::East)
+                                        .unwrap()
+                                        .texture
+                                        .strip_prefix('#')
+                                        .unwrap(),
+                                )
+                                .unwrap(),
+                        );
+                        let (west, west_render_method) = self.import_texture(
+                            textures
+                                .get(
+                                    faces
+                                        .get(&model::FaceEnum::West)
+                                        .unwrap()
+                                        .texture
+                                        .strip_prefix('#')
+                                        .unwrap(),
+                                )
+                                .unwrap(),
+                        );
+                        let (up, up_render_method) = self.import_texture(
+                            textures
+                                .get(
+                                    faces
+                                        .get(&model::FaceEnum::Up)
+                                        .unwrap()
+                                        .texture
+                                        .strip_prefix('#')
+                                        .unwrap(),
+                                )
+                                .unwrap(),
+                        );
+                        let (down, down_render_method) = self.import_texture(
+                            textures
+                                .get(
+                                    faces
+                                        .get(&model::FaceEnum::Down)
+                                        .unwrap()
+                                        .texture
+                                        .strip_prefix('#')
+                                        .unwrap(),
+                                )
+                                .unwrap(),
+                        );
+                        if north_render_method == block::RenderMethod::Opaque
+                            && south_render_method == block::RenderMethod::Opaque
+                            && east_render_method == block::RenderMethod::Opaque
+                            && west_render_method == block::RenderMethod::Opaque
+                            && up_render_method == block::RenderMethod::Opaque
+                            && down_render_method == block::RenderMethod::Opaque
+                        {
+                            self.blocks.insert(
+                                block_key,
+                                blocks::Block {
+                                    isotropic: None,
+                                    textures: Some(
+                                        if north == south && north == east && north == west {
+                                            if north == up && up == down {
+                                                blocks::Face::CubeAll(north)
+                                            } else {
+                                                blocks::Face::CubeBottomTop {
+                                                    up,
+                                                    down,
+                                                    side: north,
+                                                }
+                                            }
+                                        } else {
+                                            blocks::Face::Cube {
+                                                up,
+                                                down,
+                                                north,
+                                                south,
+                                                east,
+                                                west,
+                                            }
+                                        },
+                                    ),
+                                    carried_textures: None,
+                                    brightness_gamma: 1.0,
+                                    sound: None,
+                                },
+                            );
+                            return vec![];
+                        }
                     }
                 }
             }
 
-            self.geometries
-                .insert(geometry_key.clone(), geometry_elements);
+            self.geometries.insert(geometry.clone(), geometry_elements);
         }
 
-        // set default texture and remove textures which are the same as the default
+        // set default texture, remove textures which are the same as the default,
+        // import textures and select most fitting render method
         let mut default_texture = textures
             .remove("particle")
             .unwrap_or_else(|| textures.values().next().unwrap().to_owned());
-        if let Some(particle_texture_key) = default_texture.strip_prefix('#') {
-            default_texture = textures.get(particle_texture_key).unwrap().clone();
+        if let Some(particle_texture_ref) = default_texture.strip_prefix('#') {
+            default_texture = textures.get(particle_texture_ref).unwrap().clone();
         }
+        let mut render_method = block::RenderMethod::Opaque;
         let mut textures_to_remove = vec![];
-        for (texture_key, texture) in &textures {
+        for (texture_ref, texture) in &mut textures {
             if texture == &default_texture {
-                textures_to_remove.push(texture_key.clone());
+                textures_to_remove.push(texture_ref.clone());
+            }
+
+            let (imported_texture, imported_render_method) = self.import_texture(texture);
+            *texture = imported_texture;
+            if render_method == block::RenderMethod::Opaque
+                && (imported_render_method == block::RenderMethod::Blend
+                    || imported_render_method == block::RenderMethod::AlphaTest)
+                || render_method == block::RenderMethod::AlphaTest
+                    && imported_render_method == block::RenderMethod::Blend
+            {
+                render_method = imported_render_method;
             }
         }
-        for texture_key in textures_to_remove {
-            textures.remove(&texture_key);
+        for texture_ref in textures_to_remove {
+            textures.remove(&texture_ref);
         }
-        textures.insert("*".to_owned(), default_texture);
+        textures.insert("*".to_owned(), self.import_texture(&default_texture).0);
 
         // save components
         let components = vec![
             block::Component::Geometry {
-                identifier: format!("geometry.{}", geometry_key),
+                identifier: format!("geometry.{}", geometry),
                 bone_visibility: Default::default(),
             },
             block::Component::MaterialInstances(
                 textures
                     .into_iter()
-                    .map(|(texture_key, texture)| {
-                        let texture_name = Self::convert_name(&texture);
-                        self.textures.insert(texture);
+                    .map(|(texture_ref, texture)| {
                         (
-                            texture_key,
-                            MaterialInstance {
+                            texture_ref,
+                            block::MaterialInstance {
                                 ambient_occlusion: ambient_occlusion.unwrap(),
                                 face_dimming: true,
-                                render_method: RenderMethod::Opaque,
-                                texture: texture_name,
+                                render_method,
+                                texture,
                             },
                         )
                     })
@@ -424,6 +469,133 @@ impl Importer {
         self.components.insert(model, components.clone());
 
         components
+    }
+
+    fn import_texture(&mut self, texture: &str) -> (String, block::RenderMethod) {
+        if let Some(render_method) = self.textures.get(texture) {
+            return (Self::sanitize(texture), *render_method);
+        }
+
+        // check if it's a vanilla texture
+        let (namespace, key) = texture.split_once(':').unwrap();
+        if namespace == "minecraft" {
+            let (dir, file) = key.split_once('/').unwrap();
+            if dir == "block" {
+                let texture_path = format!("textures/blocks/{}", &self.texture_mappings[dir][file]);
+                if let Some(texture_name) = self
+                    .vanilla_texture_atlas
+                    .texture_data
+                    .iter()
+                    .find(|(_, texture)| {
+                        if texture.textures.len() != 1 {
+                            return false;
+                        }
+                        texture.textures[0].path == texture_path
+                    })
+                    .map(|(texture_name, _)| texture_name)
+                {
+                    // select render method based on texture
+                    let image = image::io::Reader::open(
+                        self.asset_path
+                            .join(format!("{}/textures/{}.png", namespace, key)),
+                    )
+                        .unwrap()
+                        .decode()
+                        .unwrap()
+                        .to_rgba8();
+                    let mut render_method = block::RenderMethod::Opaque;
+                    for pixel in image.pixels() {
+                        let alpha = pixel.0[3];
+                        if alpha != 0xFF {
+                            if alpha != 0x00 {
+                                render_method = block::RenderMethod::Blend;
+                                break;
+                            } else {
+                                render_method = block::RenderMethod::AlphaTest;
+                            }
+                        }
+                    }
+
+                    return (texture_name.to_owned(), render_method);
+                };
+            }
+        }
+
+        println!("Importing texture: {}", texture);
+        let texture_name = Self::sanitize(texture);
+        let texture_path = format!("textures/blocks/{}", texture_name);
+
+        // select render method based on texture
+        let image = image::io::Reader::open(
+            self.asset_path
+                .join(format!("{}/textures/{}.png", namespace, key)),
+        )
+        .unwrap()
+        .decode()
+        .unwrap()
+        .to_rgba8();
+        let mut render_method = block::RenderMethod::Opaque;
+        for pixel in image.pixels() {
+            let alpha = pixel.0[3];
+            if alpha != 0xFF {
+                if alpha != 0x00 {
+                    render_method = block::RenderMethod::Blend;
+                    break;
+                } else {
+                    render_method = block::RenderMethod::AlphaTest;
+                }
+            }
+        }
+
+        // copy texture
+        std::fs::copy(
+            self.asset_path
+                .join(format!("{}/textures/{}.png", namespace, key)),
+            self.resource_pack_path
+                .join(format!("{}.png", texture_path)),
+        )
+        .unwrap();
+
+        // read mcmeta
+        let mcmeta_path = self
+            .asset_path
+            .join(format!("{}/textures/{}.png.mcmeta", namespace, key));
+        if mcmeta_path.exists() {
+            let mcmeta =
+                serde_json::from_reader::<_, mcmeta::McMeta>(File::open(mcmeta_path).unwrap())
+                    .unwrap();
+            if let Some(animation) = mcmeta.animation {
+                println!("+ Animation");
+                // add to flipbook textures
+                self.flipbook_textures
+                    .push(flipbook_textures::FlipbookTexture {
+                        flipbook_texture: texture_path.clone(),
+                        atlas_index: None,
+                        atlas_tile_variant: None,
+                        atlas_tile: texture_name.clone(),
+                        ticks_per_frame: animation.frametime,
+                        frames: vec![],
+                        replicate: 1,
+                        blend_frames: animation.interpolate,
+                    })
+            }
+        }
+
+        // add to terrain textures and save render method
+        self.texture_atlas.texture_data.insert(
+            texture_name.clone(),
+            texture_atlas::TextureData {
+                textures: vec![texture_atlas::Texture {
+                    overlay_color: None,
+                    path: texture_path,
+                    tint_color: None,
+                    variations: vec![],
+                }],
+            },
+        );
+        self.textures.insert(texture_name.clone(), render_method);
+
+        (texture_name, render_method)
     }
 
     fn write_geometries(&self) {
@@ -536,65 +708,6 @@ impl Importer {
 
     fn write_textures(&self) {
         println!("Writing textures...");
-        let mut terrain_texture = texture_atlas::TextureAtlas {
-            num_mip_levels: 0,
-            padding: 0,
-            resource_pack_name: "cb".to_owned(),
-            texture_data: Default::default(),
-            texture_name: "atlas.terrain".to_owned(),
-        };
-        let mut flipbook_textures: Vec<flipbook_textures::FlipbookTexture> = vec![];
-        for texture in &self.textures {
-            println!("Writing texture: {}", texture);
-            let (namespace, key) = texture.split_once(':').unwrap();
-            let texture_name = Self::convert_name(texture);
-            let texture_path = format!("textures/blocks/{}.png", texture_name);
-
-            // copy texture
-            std::fs::copy(
-                self.asset_path
-                    .join(format!("{}/textures/{}.png", namespace, key)),
-                self.resource_pack_path.join(texture_path.clone()),
-            )
-            .unwrap();
-
-            // read mcmeta
-            let mcmeta_path = self
-                .asset_path
-                .join(format!("{}/textures/{}.png.mcmeta", namespace, key));
-            if mcmeta_path.exists() {
-                let mcmeta =
-                    serde_json::from_reader::<_, mcmeta::McMeta>(File::open(mcmeta_path).unwrap())
-                        .unwrap();
-                if let Some(animation) = mcmeta.animation {
-                    println!("+ Animation");
-                    // add to flipbook textures
-                    flipbook_textures.push(flipbook_textures::FlipbookTexture {
-                        flipbook_texture: texture_path.clone(),
-                        atlas_index: None,
-                        atlas_tile_variant: None,
-                        atlas_tile: texture_name.clone(),
-                        ticks_per_frame: animation.frametime,
-                        frames: vec![],
-                        replicate: 1,
-                        blend_frames: animation.interpolate,
-                    })
-                }
-            }
-
-            // add to terrain textures
-            terrain_texture.texture_data.insert(
-                texture_name,
-                texture_atlas::TextureData {
-                    textures: texture_atlas::Texture {
-                        overlay_color: None,
-                        path: texture_path,
-                        tint_color: None,
-                        variations: vec![],
-                    },
-                },
-            );
-        }
 
         // write terrain textures
         serde_json::to_writer_pretty(
@@ -603,7 +716,7 @@ impl Importer {
                     .join("textures/terrain_texture.json"),
             )
             .unwrap(),
-            &terrain_texture,
+            &self.texture_atlas,
         )
         .unwrap();
 
@@ -614,7 +727,7 @@ impl Importer {
                     .join("textures/flipbook_textures.json"),
             )
             .unwrap(),
-            &flipbook_textures,
+            &self.flipbook_textures,
         )
         .unwrap();
     }
@@ -631,7 +744,7 @@ impl Importer {
         .unwrap();
     }
 
-    fn convert_name(name: &str) -> String {
+    fn sanitize(name: &str) -> String {
         name.split_once(':')
             .unwrap()
             .1

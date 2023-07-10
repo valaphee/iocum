@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{hash_map::Entry, HashMap, HashSet},
     fs::File,
     path::{Path, PathBuf},
 };
@@ -21,10 +21,12 @@ struct Importer {
     behavior_pack_path: PathBuf,
     resource_pack_path: PathBuf,
 
-    blocks: HashMap<String, blocks::Block>,
+    // cache
     components: HashMap<String, Vec<block::Component>>,
-    geometries: HashMap<String, Vec<model::Element>>,
+    geometries: HashSet<String>,
     textures: HashMap<String, block::RenderMethod>,
+
+    blocks: HashMap<String, blocks::Block>,
     texture_atlas: texture_atlas::TextureAtlas,
     flipbook_textures: Vec<flipbook_textures::FlipbookTexture>,
 }
@@ -111,10 +113,14 @@ impl Importer {
                 }
 
                 for (variant_state, variant) in variants {
-                    // collect properties (only when not known beforehand)
-                    if !variant_state.is_empty() {
-                        for property in variant_state.split(',') {
-                            let (key, value) = property.split_once('=').unwrap();
+                    let condition = variant_state
+                        .split(',')
+                        .map(|property| {
+                            let Some((key, value)) = property.split_once('=') else {
+                                return "".to_string();
+                            };
+
+                            // collect properties (only when not known beforehand)
                             match block
                                 .description
                                 .properties
@@ -151,8 +157,22 @@ impl Importer {
                                     });
                                 }
                             }
-                        }
-                    }
+
+                            format!(
+                                "query.block_property('{}:{}') == {}",
+                                namespace,
+                                key,
+                                match value {
+                                    "false" => "false".to_owned(),
+                                    "true" => "true".to_owned(),
+                                    value => value
+                                        .parse::<u32>()
+                                        .map_or(format!("'{}'", value), |_| { value.to_owned() }),
+                                }
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join(" && ");
 
                     // import model and create components
                     let model = variant
@@ -174,30 +194,9 @@ impl Importer {
                     }
 
                     // either add to components or add new permutation
-                    if variant_state.is_empty() {
+                    if condition.is_empty() {
                         block.components.append(&mut components);
                     } else {
-                        let condition = variant_state
-                            .split(',')
-                            .map(|property| {
-                                let (key, value) = property.split_once('=').unwrap();
-                                format!(
-                                    "query.block_property('{}:{}') == {}",
-                                    namespace,
-                                    key,
-                                    match value {
-                                        "false" => "false".to_owned(),
-                                        "true" => "true".to_owned(),
-                                        value => value
-                                            .parse::<u32>()
-                                            .map_or(format!("'{}'", value), |_| {
-                                                value.to_owned()
-                                            }),
-                                    }
-                                )
-                            })
-                            .collect::<Vec<_>>()
-                            .join(" && ");
                         block.permutations.push(block::Permutation {
                             condition,
                             components,
@@ -205,7 +204,156 @@ impl Importer {
                     }
                 }
             }
-            block_state::BlockState::Multipart(multipart) => for _case in multipart {},
+            block_state::BlockState::Multipart(multipart) => {
+                for case in multipart {
+                    let condition = case.when.map_or("".to_string(), |when| match when {
+                        block_state::When::One(property) => {
+                            let (key, value) = property.into_iter().next().unwrap();
+
+                            // collect properties (only when not known beforehand)
+                            match block
+                                .description
+                                .properties
+                                .entry(format!("{}:{}", namespace, key))
+                            {
+                                Entry::Occupied(mut entry) => match entry.get_mut() {
+                                    block::Property::Bool(values) => {
+                                        let value = value.parse().unwrap();
+                                        if !values.contains(&value) {
+                                            values.push(value)
+                                        }
+                                    }
+                                    block::Property::Int(values) => {
+                                        let value = value.parse().unwrap();
+                                        if !values.contains(&value) {
+                                            values.push(value)
+                                        }
+                                    }
+                                    block::Property::Enum(values) => {
+                                        let value = value.to_owned();
+                                        if !values.contains(&value) {
+                                            values.push(value)
+                                        }
+                                    }
+                                    _ => unreachable!(),
+                                },
+                                Entry::Vacant(entry) => {
+                                    entry.insert(if let Ok(value) = value.parse::<bool>() {
+                                        block::Property::Bool(vec![value])
+                                    } else if let Ok(value) = value.parse::<u32>() {
+                                        block::Property::Int(vec![value])
+                                    } else {
+                                        block::Property::Enum(vec![value.to_owned()])
+                                    });
+                                }
+                            }
+
+                            format!(
+                                "query.block_property('{}:{}') == {}",
+                                namespace,
+                                key,
+                                match value.as_str() {
+                                    "false" => "false".to_owned(),
+                                    "true" => "true".to_owned(),
+                                    value => value
+                                        .parse::<u32>()
+                                        .map_or(format!("'{}'", value), |_| { value.to_owned() }),
+                                }
+                            )
+                        }
+                        block_state::When::Many(properties) => {
+                            let (key, value) = properties.into_iter().next().unwrap();
+                            value
+                                .into_iter()
+                                .map(|property| {
+                                    let (key, value) = property.into_iter().next().unwrap();
+
+                                    // collect properties (only when not known beforehand)
+                                    match block
+                                        .description
+                                        .properties
+                                        .entry(format!("{}:{}", namespace, key))
+                                    {
+                                        Entry::Occupied(mut entry) => match entry.get_mut() {
+                                            block::Property::Bool(values) => {
+                                                let value = value.parse().unwrap();
+                                                if !values.contains(&value) {
+                                                    values.push(value)
+                                                }
+                                            }
+                                            block::Property::Int(values) => {
+                                                let value = value.parse().unwrap();
+                                                if !values.contains(&value) {
+                                                    values.push(value)
+                                                }
+                                            }
+                                            block::Property::Enum(values) => {
+                                                let value = value.to_owned();
+                                                if !values.contains(&value) {
+                                                    values.push(value)
+                                                }
+                                            }
+                                            _ => unreachable!(),
+                                        },
+                                        Entry::Vacant(entry) => {
+                                            entry.insert(
+                                                if let Ok(value) = value.parse::<bool>() {
+                                                    block::Property::Bool(vec![value])
+                                                } else if let Ok(value) = value.parse::<u32>() {
+                                                    block::Property::Int(vec![value])
+                                                } else {
+                                                    block::Property::Enum(vec![value.to_owned()])
+                                                },
+                                            );
+                                        }
+                                    }
+
+                                    format!(
+                                        "query.block_property('{}:{}') == {}",
+                                        namespace,
+                                        key,
+                                        match value.as_str() {
+                                            "false" => "false".to_owned(),
+                                            "true" => "true".to_owned(),
+                                            value => value
+                                                .parse::<u32>()
+                                                .map_or(format!("'{}'", value), |_| {
+                                                    value.to_owned()
+                                                }),
+                                        }
+                                    )
+                                })
+                                .collect::<Vec<_>>()
+                                .join(match key.as_str() {
+                                    "AND" => " && ",
+                                    "OR" => " || ",
+                                    _ => todo!(),
+                                })
+                        }
+                    });
+
+                    // import model and create components
+                    let model = case
+                        .apply
+                        .into_iter()
+                        .max_by_key(|model| model.weight)
+                        .unwrap();
+                    let mut components = self.import_model(model.model, None);
+                    if model.x != 0 || model.y != 0 {
+                        components.push(block::Component::Transformation {
+                            translation: Vec3::ZERO,
+                            scale: Vec3::ONE,
+                            rotation: Vec3::new(model.x as f32, model.y as f32, 0.0),
+                        });
+                    }
+
+                    // add new permutation
+                    block.permutations.push(block::Permutation {
+                        condition,
+                        components,
+                    });
+                }
+            }
         };
 
         // sort property values (only when not known beforehand)
@@ -247,7 +395,7 @@ impl Importer {
         let mut ambient_occlusion = None;
         let mut textures = HashMap::new();
         let mut geometry = String::new();
-        let mut geometry_elements = vec![];
+        let mut elements = vec![];
         let mut parent = model.clone();
         loop {
             let (namespace, key) = parent.split_once(':').unwrap();
@@ -274,8 +422,8 @@ impl Importer {
             }
             if geometry.is_empty() && !model.elements.is_empty() {
                 geometry = Self::sanitize(&parent);
-                if !self.geometries.contains_key(&geometry) {
-                    geometry_elements = model.elements;
+                if !self.geometries.contains(&geometry) {
+                    elements = model.elements;
                 }
             }
 
@@ -286,11 +434,11 @@ impl Importer {
         }
 
         // save geometry
-        if !geometry_elements.is_empty() {
+        if !elements.is_empty() {
             // check if it's a unit cube and use built-in model
-            if geometry_elements.len() == 1 {
+            if elements.len() == 1 {
                 if let Some(block_key) = block {
-                    let element = geometry_elements.first().unwrap();
+                    let element = elements.first().unwrap();
                     if element.from == Vec3::ZERO && element.to == Vec3::new(16.0, 16.0, 16.0) {
                         let faces = &element.faces;
                         let (north, north_render_method) = self.import_texture(
@@ -409,7 +557,108 @@ impl Importer {
                 }
             }
 
-            self.geometries.insert(geometry.clone(), geometry_elements);
+            let mut bone = geometry::Bone {
+                name: geometry.clone(),
+                parent: None,
+                pivot: None,
+                rotation: None,
+                mirror: None,
+                inflate: None,
+                cubes: vec![],
+            };
+
+            // add cubes to bones
+            for element in elements {
+                let rotation;
+                let pivot;
+                if let Some(element_rotation) = &element.rotation {
+                    rotation = Some(match element_rotation.axis {
+                        model::Axis::X => Vec3::new(-element_rotation.angle, 0.0, 0.0),
+                        model::Axis::Y => Vec3::new(0.0, -element_rotation.angle, 0.0),
+                        model::Axis::Z => Vec3::new(0.0, 0.0, element_rotation.angle),
+                    });
+                    pivot = Some(Vec3::new(
+                        -element_rotation.origin.x + 8.0,
+                        element_rotation.origin.y,
+                        element_rotation.origin.z - 8.0,
+                    ));
+                } else {
+                    rotation = None;
+                    pivot = None;
+                }
+                bone.cubes.push(geometry::Cube {
+                    origin: Some(Vec3::new(
+                        -element.to.x + 8.0,
+                        element.from.y,
+                        element.from.z - 8.0,
+                    )),
+                    size: Some(element.to - element.from),
+                    rotation,
+                    pivot,
+                    inflate: None,
+                    mirror: None,
+                    uv: element
+                        .faces
+                        .iter()
+                        .map(|(&face_enum, face)| {
+                            let uv;
+                            let uv_size;
+                            if let Some(uv_from_to) = face.uv {
+                                uv = Vec2::new(uv_from_to[0], uv_from_to[1]);
+                                uv_size = Vec2::new(
+                                    uv_from_to[2] - uv_from_to[0],
+                                    uv_from_to[3] - uv_from_to[1],
+                                );
+                            } else {
+                                todo!()
+                            }
+                            (
+                                match face_enum {
+                                    model::FaceEnum::North => geometry::FaceEnum::North,
+                                    model::FaceEnum::South => geometry::FaceEnum::South,
+                                    model::FaceEnum::East => geometry::FaceEnum::East,
+                                    model::FaceEnum::West => geometry::FaceEnum::West,
+                                    model::FaceEnum::Up => geometry::FaceEnum::Up,
+                                    model::FaceEnum::Down => geometry::FaceEnum::Down,
+                                },
+                                geometry::Face {
+                                    uv,
+                                    uv_size: Some(uv_size),
+                                    material_instance: Some(
+                                        face.texture.strip_prefix('#').unwrap().to_owned(),
+                                    ),
+                                },
+                            )
+                        })
+                        .collect(),
+                });
+            }
+
+            // write geometry
+            serde_json::to_writer_pretty(
+                File::create(
+                    self.resource_pack_path
+                        .join(format!("models/entity/{}.geo.json", geometry)),
+                )
+                .unwrap(),
+                &VersionedData {
+                    format_version: "1.16.0".to_owned(),
+                    data: Data::Geometry(vec![geometry::Geometry {
+                        description: geometry::Description {
+                            identifier: format!("geometry.{}", geometry),
+                            visible_bounds_width: None,
+                            visible_bounds_height: None,
+                            visible_bounds_offset: None,
+                            texture_width: Some(16),
+                            texture_height: Some(16),
+                        },
+                        bones: vec![bone],
+                    }]),
+                },
+            )
+            .unwrap();
+
+            self.geometries.insert(geometry.clone());
         }
 
         // set default texture, remove textures which are the same as the default,
@@ -499,10 +748,10 @@ impl Importer {
                         self.asset_path
                             .join(format!("{}/textures/{}.png", namespace, key)),
                     )
-                        .unwrap()
-                        .decode()
-                        .unwrap()
-                        .to_rgba8();
+                    .unwrap()
+                    .decode()
+                    .unwrap()
+                    .to_rgba8();
                     let mut render_method = block::RenderMethod::Opaque;
                     for pixel in image.pixels() {
                         let alpha = pixel.0[3];
@@ -598,118 +847,22 @@ impl Importer {
         (texture_name, render_method)
     }
 
-    fn write_geometries(&self) {
-        println!("Writing geometries...");
-        for (geometry_key, elements) in &self.geometries {
-            println!("Writing geometry: {}", geometry_key);
-            // generate list of bones and create references to element ids
-            let mut bone = geometry::Bone {
-                name: geometry_key.clone(),
-                parent: None,
-                pivot: None,
-                rotation: None,
-                mirror: None,
-                inflate: None,
-                cubes: vec![],
-            };
+    fn write_texture_index(&self) {
+        println!("Writing texture index...");
 
-            // add cubes to bones
-            for element in elements {
-                let rotation;
-                let pivot;
-                if let Some(element_rotation) = &element.rotation {
-                    rotation = Some(match element_rotation.axis {
-                        model::Axis::X => Vec3::new(-element_rotation.angle, 0.0, 0.0),
-                        model::Axis::Y => Vec3::new(0.0, -element_rotation.angle, 0.0),
-                        model::Axis::Z => Vec3::new(0.0, 0.0, element_rotation.angle),
-                    });
-                    pivot = Some(Vec3::new(
-                        -element_rotation.origin.x + 8.0,
-                        element_rotation.origin.y,
-                        element_rotation.origin.z - 8.0,
-                    ));
-                } else {
-                    rotation = None;
-                    pivot = None;
-                }
-                bone.cubes.push(geometry::Cube {
-                    origin: Some(Vec3::new(
-                        -element.to.x + 8.0,
-                        element.from.y,
-                        element.from.z - 8.0,
-                    )),
-                    size: Some(element.to - element.from),
-                    rotation,
-                    pivot,
-                    inflate: None,
-                    mirror: None,
-                    uv: element
-                        .faces
-                        .iter()
-                        .map(|(&face_enum, face)| {
-                            let uv;
-                            let uv_size;
-                            if let Some(uv_from_to) = face.uv {
-                                uv = Vec2::new(uv_from_to[0], uv_from_to[1]);
-                                uv_size = Vec2::new(
-                                    uv_from_to[2] - uv_from_to[0],
-                                    uv_from_to[3] - uv_from_to[1],
-                                );
-                            } else {
-                                todo!()
-                            }
-                            (
-                                match face_enum {
-                                    model::FaceEnum::North => geometry::FaceEnum::North,
-                                    model::FaceEnum::South => geometry::FaceEnum::South,
-                                    model::FaceEnum::East => geometry::FaceEnum::East,
-                                    model::FaceEnum::West => geometry::FaceEnum::West,
-                                    model::FaceEnum::Up => geometry::FaceEnum::Up,
-                                    model::FaceEnum::Down => geometry::FaceEnum::Down,
-                                },
-                                geometry::Face {
-                                    uv,
-                                    uv_size: Some(uv_size),
-                                    material_instance: Some(
-                                        face.texture.strip_prefix('#').unwrap().to_owned(),
-                                    ),
-                                },
-                            )
-                        })
-                        .collect(),
-                });
-            }
+        // write textures
+        serde_json::to_writer_pretty(
+            File::create(self.resource_pack_path.join("textures/textures_list.json")).unwrap(),
+            &self
+                .texture_atlas
+                .texture_data
+                .values()
+                .flat_map(|textures| textures.textures.iter().map(|texture| &texture.path))
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
 
-            // write geometry
-            serde_json::to_writer_pretty(
-                File::create(
-                    self.resource_pack_path
-                        .join(format!("models/entity/{}.geo.json", geometry_key)),
-                )
-                .unwrap(),
-                &VersionedData {
-                    format_version: "1.16.0".to_owned(),
-                    data: Data::Geometry(vec![geometry::Geometry {
-                        description: geometry::Description {
-                            identifier: format!("geometry.{}", geometry_key),
-                            visible_bounds_width: None,
-                            visible_bounds_height: None,
-                            visible_bounds_offset: None,
-                            texture_width: Some(16),
-                            texture_height: Some(16),
-                        },
-                        bones: vec![bone],
-                    }]),
-                },
-            )
-            .unwrap();
-        }
-    }
-
-    fn write_textures(&self) {
-        println!("Writing textures...");
-
-        // write terrain textures
+        // write textures atlas
         serde_json::to_writer_pretty(
             File::create(
                 self.resource_pack_path
@@ -732,8 +885,8 @@ impl Importer {
         .unwrap();
     }
 
-    fn write_blocks(&self) {
-        println!("Writing blocks...");
+    fn write_block_index(&self) {
+        println!("Writing block index...");
         serde_json::to_writer_pretty(
             File::create(self.resource_pack_path.join("blocks.json")).unwrap(),
             &blocks::Blocks {
@@ -793,7 +946,6 @@ fn main() {
         .unwrap();
     }
 
-    importer.write_geometries();
-    importer.write_textures();
-    importer.write_blocks();
+    importer.write_texture_index();
+    importer.write_block_index();
 }

@@ -69,7 +69,22 @@ impl Importer {
         .unwrap()
         {
             block_state::BlockState::Variants(variants) => {
-                let single_variant = variants.len() == 1;
+                // TODO: only useful for blocks with one model
+                let first_model = variants.values().next().unwrap().0.iter().max_by_key(|model| model.weight).unwrap();
+                let single_model = variants.values().all(|variant| {
+                    first_model.model == variant.0.iter().max_by_key(|model| model.weight).unwrap().model
+                });
+                if single_model {
+                    block.components = self.import_model(
+                        first_model.model.to_owned(),
+                        if variants.len() == 1 && first_model.x == 0 && first_model.y == 0 {
+                            Some(block.description.identifier.clone())
+                        } else {
+                            None
+                        },
+                    );
+                }
+
                 for (variant_key, variant) in variants {
                     // collect properties (only when not known beforehand)
                     if !variant_key.is_empty() {
@@ -120,14 +135,14 @@ impl Importer {
                         .into_iter()
                         .max_by_key(|model| model.weight)
                         .unwrap();
-                    let mut components = self.import_model(
-                        model.model,
-                        if single_variant {
-                            Some(block.description.identifier.clone())
-                        } else {
-                            None
-                        },
-                    );
+                    let mut components = if single_model {
+                        vec![]
+                    } else {
+                        self.import_model(
+                            model.model,
+                            None,
+                        )
+                    };
                     if model.x != 0 || model.y != 0 {
                         components.push(block::Component::Transformation {
                             translation: Vec3::ZERO,
@@ -136,9 +151,9 @@ impl Importer {
                         });
                     }
 
-                    // either set components or add to permutations
+                    // either add to components or add new permutation
                     if variant_key.is_empty() {
-                        block.components = components;
+                        block.components.append(&mut components);
                     } else {
                         let condition = variant_key
                             .split(',')
@@ -191,6 +206,9 @@ impl Importer {
                 _ => unreachable!(),
             }
         }
+
+        // remove empty permutations
+        block.permutations.retain(|permutation| !permutation.components.is_empty());
 
         block
     }

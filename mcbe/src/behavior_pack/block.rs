@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use glam::Vec3;
 use serde::{Deserialize, Serialize};
@@ -42,8 +42,8 @@ pub struct Description {
     /// Map of key/value pairs that maps the property name (key) to an array of
     /// all possible values for that property (value). Learn how to use block
     /// properties in Block Properties and Permutations.
-    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    pub properties: HashMap<String, Property>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub properties: BTreeMap<String, Property>,
 
     /// Specifies the menu category and group for the block, which determine
     /// where this block is placed in the inventory and crafting table container
@@ -167,17 +167,7 @@ pub enum Component {
     /// are used. Experimental toggles required: Holiday Creator Features (in
     /// format versions before 1.19.50).
     #[serde(rename = "minecraft:collision_box")]
-    CollisionBox {
-        /// Minimal position of the bounds of the collision box. origin is
-        /// specified as [x, y, z] and must be in the range (-8, 0, -8) to (8,
-        /// 16, 8), inclusive.
-        origin: Vec3,
-
-        /// Size of each side of the collision box. Size is specified as [x, y,
-        /// z]. origin + size must be in the range (-8, 0, -8) to (8, 16, 8),
-        /// inclusive.
-        size: Vec3,
-    },
+    CollisionBox(BoolOrValue<BoundingBox>),
 
     /// Describes the destructible by explosion properties for this block. If
     /// set to true, the block will have the default explosion resistance. If
@@ -185,14 +175,7 @@ pub enum Component {
     /// component is omitted, the block will have the default explosion
     /// resistance.
     #[serde(rename = "minecraft:destructible_by_explosion")]
-    DestructibleByExplosion {
-        /// Describes how resistant the block is to explosion. Greater values
-        /// mean the block is less likely to break when near an explosion (or
-        /// has higher resistance to explosions). The scale will be different
-        /// for different explosion power levels. A negative value or 0 means it
-        /// will easily explode; larger numbers increase level of resistance.
-        explosion_resistance: f32,
-    },
+    DestructibleByExplosion(BoolOrValue<DestructibleByExplosion>),
 
     /// Describes the destructible by mining properties for this block. If set
     /// to true, the block will take the default number of seconds to destroy.
@@ -200,39 +183,14 @@ pub enum Component {
     /// component is omitted, the block will take the default number of seconds
     /// to destroy.
     #[serde(rename = "minecraft:destructible_by_mining")]
-    DestructibleByMining {
-        /// Sets the number of seconds it takes to destroy the block with base
-        /// equipment. Greater numbers result in greater mining times.
-        seconds_to_destroy: f32,
-    },
+    DestructibleByMining(BoolOrValue<DestructibleByMining>),
 
     /// Describes the flammable properties for this block. If set to true,
     /// default values are used. If set to false, or if this component is
     /// omitted, the block will not be able to catch on fire naturally from
     /// neighbors, but it can still be directly ignited.
     #[serde(rename = "minecraft:flammable")]
-    Flammable {
-        /// A modifier affecting the chance that this block will catch flame
-        /// when next to a fire. Values are greater than or equal to 0, with a
-        /// higher number meaning more likely to catch on fire. For a
-        /// catch_chance_modifier greater than 0, the fire will continue to burn
-        /// until the block is destroyed (or it will burn forever if the
-        /// "destroy_chance_modifier" is 0). If the catch_chance_modifier is 0,
-        /// and the block is directly ignited, the fire will eventually burn out
-        /// without destroying the block (or it will have a chance to be
-        /// destroyed if destroy_chance_modifier is greater than 0). The default
-        /// value of 5 is the same as that of Planks.
-        catch_chance_modifier: u32,
-
-        /// A modifier affecting the chance that this block will be destroyed by
-        /// flames when on fire. Values are greater than or equal to 0, with a
-        /// higher number meaning more likely to be destroyed by fire. For a
-        /// destroy_chance_modifier of 0, the block will never be destroyed by
-        /// fire, and the fire will burn forever if the catch_chance_modifier is
-        /// greater than 0. The default value of 20 is the same as that of
-        /// Planks.
-        destroy_change_modifier: u32,
-    },
+    Flammable(BoolOrValue<Flammable>),
 
     /// Describes the friction for this block in a range of (0.0-0.9). Friction
     /// affects an entity's movement speed when it travels on the block. Greater
@@ -285,7 +243,7 @@ pub enum Component {
     /// default values are used. Experimental toggles required: Holiday Creator
     /// Features (in format versions before 1.19.60).
     #[serde(rename = "minecraft:selection_box")]
-    SelectionBox { origin: Vec3, size: Vec3 },
+    SelectionBox(BoolOrValue<BoundingBox>),
 
     /// The block's translation around the center of the cube in degrees. The
     /// rotation order is [x, y, z]. Angles need to be in multiples of 90.
@@ -301,6 +259,67 @@ pub enum Component {
     /// Specifies that a unit cube is to be used with tessellation.
     #[serde(rename = "minecraft:unit_cube")]
     UnitCube {},
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+pub enum BoolOrValue<T> {
+    Bool(bool),
+    Value(T)
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BoundingBox {
+    /// Minimal position of the bounds of the bounding box. origin is
+    /// specified as [x, y, z] and must be in the range (-8, 0, -8) to (8,
+    /// 16, 8), inclusive.
+    pub origin: Vec3,
+
+    /// Size of each side of the bounding box. Size is specified as [x, y,
+    /// z]. origin + size must be in the range (-8, 0, -8) to (8, 16, 8),
+    /// inclusive.
+    pub size: Vec3,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DestructibleByExplosion {
+    /// Describes how resistant the block is to explosion. Greater values
+    /// mean the block is less likely to break when near an explosion (or
+    /// has higher resistance to explosions). The scale will be different
+    /// for different explosion power levels. A negative value or 0 means it
+    /// will easily explode; larger numbers increase level of resistance.
+    pub explosion_resistance: f32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DestructibleByMining {
+    /// Sets the number of seconds it takes to destroy the block with base
+    /// equipment. Greater numbers result in greater mining times.
+    pub seconds_to_destroy: f32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Flammable {
+    /// A modifier affecting the chance that this block will catch flame
+    /// when next to a fire. Values are greater than or equal to 0, with a
+    /// higher number meaning more likely to catch on fire. For a
+    /// catch_chance_modifier greater than 0, the fire will continue to burn
+    /// until the block is destroyed (or it will burn forever if the
+    /// "destroy_chance_modifier" is 0). If the catch_chance_modifier is 0,
+    /// and the block is directly ignited, the fire will eventually burn out
+    /// without destroying the block (or it will have a chance to be
+    /// destroyed if destroy_chance_modifier is greater than 0). The default
+    /// value of 5 is the same as that of Planks.
+    pub catch_chance_modifier: u32,
+
+    /// A modifier affecting the chance that this block will be destroyed by
+    /// flames when on fire. Values are greater than or equal to 0, with a
+    /// higher number meaning more likely to be destroyed by fire. For a
+    /// destroy_chance_modifier of 0, the block will never be destroyed by
+    /// fire, and the fire will burn forever if the catch_chance_modifier is
+    /// greater than 0. The default value of 20 is the same as that of
+    /// Planks.
+    pub destroy_change_modifier: u32,
 }
 
 /// minecraft:material_instances is a JSON Object component that specifies the

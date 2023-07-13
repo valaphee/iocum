@@ -1,10 +1,13 @@
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap},
     fs::File,
     path::{Path, PathBuf},
 };
+use std::collections::BTreeMap;
 
 use glam::{Vec2, Vec3};
+use serde::{Deserialize, Serialize};
+use serde_with::{KeyValueMap, serde_as};
 
 use iokum_mcbe::{
     behavior_pack::block,
@@ -39,7 +42,7 @@ impl Importer {
     ) -> Self {
         Self {
             texture_mappings: serde_json::from_reader(File::open("textures.json").unwrap()).unwrap(),
-            vanilla_texture_atlas: serde_json::from_reader(File::open(r"C:\Program Files\WindowsApps\Microsoft.MinecraftUWP_1.20.102.0_x64__8wekyb3d8bbwe\data\resource_packs\vanilla\textures\terrain_texture.json").unwrap()).unwrap(),
+            vanilla_texture_atlas: serde_json::from_reader(File::open(r"C:\Program Files\WindowsApps\Microsoft.MinecraftUWP_1.20.1001.0_x64__8wekyb3d8bbwe\data\resource_packs\vanilla\textures\terrain_texture.json").unwrap()).unwrap(),
             asset_path: asset_path.as_ref().to_path_buf(),
             behavior_pack_path: behavior_pack_path.as_ref().to_path_buf(),
             resource_pack_path: resource_pack_path.as_ref().to_path_buf(),
@@ -121,44 +124,6 @@ impl Importer {
                                 return "".to_string();
                             };
 
-                            // collect properties (only when not known beforehand)
-                            match block
-                                .description
-                                .properties
-                                .entry(format!("{}:{}", namespace, key))
-                            {
-                                Entry::Occupied(mut entry) => match entry.get_mut() {
-                                    block::Property::Bool(values) => {
-                                        let value = value.parse().unwrap();
-                                        if !values.contains(&value) {
-                                            values.push(value)
-                                        }
-                                    }
-                                    block::Property::Int(values) => {
-                                        let value = value.parse().unwrap();
-                                        if !values.contains(&value) {
-                                            values.push(value)
-                                        }
-                                    }
-                                    block::Property::Enum(values) => {
-                                        let value = value.to_owned();
-                                        if !values.contains(&value) {
-                                            values.push(value)
-                                        }
-                                    }
-                                    _ => unreachable!(),
-                                },
-                                Entry::Vacant(entry) => {
-                                    entry.insert(if let Ok(value) = value.parse::<bool>() {
-                                        block::Property::Bool(vec![value])
-                                    } else if let Ok(value) = value.parse::<u32>() {
-                                        block::Property::Int(vec![value])
-                                    } else {
-                                        block::Property::Enum(vec![value.to_owned()])
-                                    });
-                                }
-                            }
-
                             format!(
                                 "query.block_property('{}:{}') == {}",
                                 namespace,
@@ -194,15 +159,11 @@ impl Importer {
                         });
                     }
 
-                    // either add to components or add new permutation
-                    if condition.is_empty() {
-                        block.components.append(&mut components);
-                    } else {
-                        block.permutations.push(block::Permutation {
-                            condition,
-                            components,
-                        });
-                    }
+                    // add new permutation
+                    block.permutations.push(block::Permutation {
+                        condition,
+                        components,
+                    });
                 }
             }
             block_state::BlockState::Multipart(multipart) => {
@@ -210,44 +171,6 @@ impl Importer {
                     let condition = case.when.map_or("".to_string(), |when| match when {
                         block_state::When::One(property) => {
                             let (key, value) = property.into_iter().next().unwrap();
-
-                            // collect properties (only when not known beforehand)
-                            match block
-                                .description
-                                .properties
-                                .entry(format!("{}:{}", namespace, key))
-                            {
-                                Entry::Occupied(mut entry) => match entry.get_mut() {
-                                    block::Property::Bool(values) => {
-                                        let value = value.parse().unwrap();
-                                        if !values.contains(&value) {
-                                            values.push(value)
-                                        }
-                                    }
-                                    block::Property::Int(values) => {
-                                        let value = value.parse().unwrap();
-                                        if !values.contains(&value) {
-                                            values.push(value)
-                                        }
-                                    }
-                                    block::Property::Enum(values) => {
-                                        let value = value.to_owned();
-                                        if !values.contains(&value) {
-                                            values.push(value)
-                                        }
-                                    }
-                                    _ => unreachable!(),
-                                },
-                                Entry::Vacant(entry) => {
-                                    entry.insert(if let Ok(value) = value.parse::<bool>() {
-                                        block::Property::Bool(vec![value])
-                                    } else if let Ok(value) = value.parse::<u32>() {
-                                        block::Property::Int(vec![value])
-                                    } else {
-                                        block::Property::Enum(vec![value.to_owned()])
-                                    });
-                                }
-                            }
 
                             format!(
                                 "query.block_property('{}:{}') == {}",
@@ -268,46 +191,6 @@ impl Importer {
                                 .into_iter()
                                 .map(|property| {
                                     let (key, value) = property.into_iter().next().unwrap();
-
-                                    // collect properties (only when not known beforehand)
-                                    match block
-                                        .description
-                                        .properties
-                                        .entry(format!("{}:{}", namespace, key))
-                                    {
-                                        Entry::Occupied(mut entry) => match entry.get_mut() {
-                                            block::Property::Bool(values) => {
-                                                let value = value.parse().unwrap();
-                                                if !values.contains(&value) {
-                                                    values.push(value)
-                                                }
-                                            }
-                                            block::Property::Int(values) => {
-                                                let value = value.parse().unwrap();
-                                                if !values.contains(&value) {
-                                                    values.push(value)
-                                                }
-                                            }
-                                            block::Property::Enum(values) => {
-                                                let value = value.to_owned();
-                                                if !values.contains(&value) {
-                                                    values.push(value)
-                                                }
-                                            }
-                                            _ => unreachable!(),
-                                        },
-                                        Entry::Vacant(entry) => {
-                                            entry.insert(
-                                                if let Ok(value) = value.parse::<bool>() {
-                                                    block::Property::Bool(vec![value])
-                                                } else if let Ok(value) = value.parse::<u32>() {
-                                                    block::Property::Int(vec![value])
-                                                } else {
-                                                    block::Property::Enum(vec![value.to_owned()])
-                                                },
-                                            );
-                                        }
-                                    }
 
                                     format!(
                                         "query.block_property('{}:{}') == {}",
@@ -357,28 +240,10 @@ impl Importer {
             }
         };
 
-        // sort property values (only when not known beforehand)
-        for property in block.description.properties.values_mut() {
-            match property {
-                block::Property::Bool(values) => {
-                    values.sort();
-                }
-                block::Property::Int(values) => {
-                    *property = block::Property::IntRange {
-                        values: block::Range {
-                            min: *values.iter().min().unwrap(),
-                            max: *values.iter().max().unwrap(),
-                        },
-                    }
-                }
-                block::Property::Enum(values) => {
-                    values.sort();
-                }
-                _ => unreachable!(),
-            }
+        // set default components and remove empty permutations
+        if let Some(position) = block.permutations.iter().position(|permutation| permutation.condition.is_empty()) {
+            block.components.append(&mut block.permutations.remove(position).components);
         }
-
-        // remove empty permutations
         block
             .permutations
             .retain(|permutation| !permutation.components.is_empty());
@@ -393,7 +258,6 @@ impl Importer {
         }
 
         // merge all models
-        let mut ambient_occlusion = None;
         let mut textures = HashMap::new();
         let mut geometry = String::new();
         let mut elements = vec![];
@@ -409,9 +273,6 @@ impl Importer {
 
             println!("Importing model: {}", parent);
             let model: model::Model = serde_json::from_reader(file).unwrap();
-            if ambient_occlusion.is_none() {
-                ambient_occlusion = Some(model.ambient_occlusion)
-            }
             for (texture_ref, texture) in model.textures {
                 if let Entry::Vacant(entry) = textures.entry(texture_ref) {
                     entry.insert(if texture.starts_with('#') || texture.contains(':') {
@@ -695,7 +556,7 @@ impl Importer {
                         (
                             texture_ref,
                             block::MaterialInstance {
-                                ambient_occlusion: ambient_occlusion.unwrap(),
+                                ambient_occlusion: true,
                                 face_dimming: true,
                                 render_method,
                                 texture,
@@ -855,27 +716,103 @@ fn main() {
         r"C:\Users\valaphee\AppData\Local\Packages\Microsoft.MinecraftUWP_8wekyb3d8bbwe\LocalState\games\com.mojang\development_resource_packs\MysteryMod",
     );
 
-    for dir_entry in std::fs::read_dir(importer.asset_path.join("cb/blockstates")).unwrap() {
-        let dir_entry = dir_entry.unwrap();
-        if !dir_entry.metadata().unwrap().is_file() {
-            continue;
-        }
+    let blocks: ExportBlocks = serde_json::from_reader(File::open(r"C:\Users\valaphee\CLionProjects\iokum\blocks.json").unwrap()).unwrap();
+    let mappingtail: HashMap<String, Vec<String>> = serde_json::from_reader(File::open(r"C:\Users\valaphee\CLionProjects\iokum\mappingtail.json").unwrap()).unwrap();
+    let mappingtail_blockstates = mappingtail.get("blockstates").unwrap();
+    let mut blockstail = Vec::new();
+    let mut itemstail = Vec::new();
+    for block_data in blocks.0 {
+        let mut block = importer.import_blockstate(block_data.id.clone());
 
-        let key = dir_entry
-            .file_name()
-            .to_str()
-            .unwrap()
-            .strip_suffix(".json")
-            .unwrap()
-            .to_owned();
-        let block = importer.import_blockstate(format!("cb:{}", key));
+        let mut properties = BTreeMap::new();
+        for property in block_data.properties {
+            let mut property_values = property.second.into_iter();
+            let first_value = property_values.next().unwrap();
+            let mut new_property = if let Ok(value) = first_value.parse::<bool>() {
+                block::Property::Bool(vec![value])
+            } else if let Ok(value) = first_value.parse::<u32>() {
+                block::Property::Int(vec![value])
+            } else {
+                block::Property::Enum(vec![first_value.to_owned()])
+            };
+            for value in property_values {
+                match &mut new_property {
+                    block::Property::Bool(values) => {
+                        values.push(value.parse().unwrap())
+                    }
+                    block::Property::Int(values) => {
+                        values.push(value.parse().unwrap())
+                    }
+                    block::Property::Enum(values) => {
+                        values.push(value)
+                    }
+                    _ => unreachable!()
+                }
+            }
+            properties.insert(format!("cb:{}", property.first), new_property);
+        }
+        block.description.properties = properties;
+        {
+            let shape = block_data.collision_shape;
+            let min = Vec3::new(shape.min_x, shape.min_y, shape.min_z).clamp(Vec3::ZERO, Vec3::ONE);
+            let max = Vec3::new(shape.max_x, shape.max_y, shape.max_z).clamp(Vec3::ZERO, Vec3::ONE);
+            let size = max - min;
+            if size.x == 0.0 || size.y == 0.0 || size.z == 0.0 {
+                block.components.push(block::Component::CollisionBox(block::BoolOrValue::Bool(false)));
+            } else if min != Vec3::ZERO || max != Vec3::ONE {
+                block.components.push(block::Component::CollisionBox(block::BoolOrValue::Value(block::BoundingBox {
+                    origin: (min - Vec3::new(0.5, 0.0, 0.5)) * 16.0,
+                    size: size * 16.0,
+                })));
+            }
+        }
+        if block_data.blast_resistance >= 0.0 && block_data.blast_resistance <= 3600000.0 {
+            block.components.push(block::Component::DestructibleByExplosion(block::BoolOrValue::Value(block::DestructibleByExplosion {
+                explosion_resistance: block_data.blast_resistance,
+            })));
+        } else {
+            block.components.push(block::Component::DestructibleByExplosion(block::BoolOrValue::Bool(false)));
+        }
+        if block_data.hardness >= 0.0 {
+            block.components.push(block::Component::DestructibleByMining(block::BoolOrValue::Value(block::DestructibleByMining {
+                seconds_to_destroy: block_data.hardness,
+            })));
+        } else {
+            block.components.push(block::Component::DestructibleByMining(block::BoolOrValue::Bool(false)));
+        }
+        if block_data.burnable {
+            block.components.push(block::Component::Flammable(block::BoolOrValue::Bool(true)));
+        }
+        if block_data.opacity != 0 {
+            block.components.push(block::Component::LightDampening(15));
+        }
+        if block_data.luminance != 0 {
+            block.components.push(block::Component::LightEmission(block_data.luminance));
+        }
+        if block_data.map_color != 0 {
+            block.components.push(block::Component::MapColor(format!("#{:06X}", block_data.map_color)));
+        }
+        {
+            let shape = block_data.outline_shape;
+            let min = Vec3::new(shape.min_x, shape.min_y, shape.min_z).clamp(Vec3::ZERO, Vec3::ONE);
+            let max = Vec3::new(shape.max_x, shape.max_y, shape.max_z).clamp(Vec3::ZERO, Vec3::ONE);
+            let size = max - min;
+            if size.x == 0.0 || size.y == 0.0 || size.z == 0.0 {
+                block.components.push(block::Component::SelectionBox(block::BoolOrValue::Bool(false)));
+            } else if min != Vec3::ZERO || max != Vec3::ONE {
+                block.components.push(block::Component::SelectionBox(block::BoolOrValue::Value(block::BoundingBox {
+                    origin: (min - Vec3::new(0.5, 0.0, 0.5)) * 16.0,
+                    size: size * 16.0,
+                })));
+            }
+        }
 
         // write block
         serde_json::to_writer_pretty(
             File::create(
                 importer
                     .behavior_pack_path
-                    .join(format!(r"blocks\{}.json", key)),
+                    .join(format!(r"blocks\{}.json", block.description.identifier.split_once(':').unwrap().1)),
             )
             .unwrap(),
             &VersionedData {
@@ -884,6 +821,32 @@ fn main() {
             },
         )
         .unwrap();
+
+        for blockstate in mappingtail_blockstates.iter().filter(|blockstate| blockstate.starts_with(&block_data.id)) {
+            let mut properties = BTreeMap::new();
+            if blockstate.contains('[') {
+                for property in blockstate[blockstate.find('[').unwrap() + 1..blockstate.len() - 1].split(',') {
+                    let (key, value) = property.split_once('=').unwrap();
+                    properties.insert(key.to_owned(), if let Ok(value) = value.parse::<bool>() {
+                        GeyserBlockMappingProperty::Bool(value)
+                    } else if let Ok(value) = value.parse::<u32>() {
+                        GeyserBlockMappingProperty::Int(value)
+                    } else {
+                        GeyserBlockMappingProperty::Enum(value.to_owned())
+                    });
+                }
+            }
+            blockstail.push(GeyserBlockMapping {
+                java_identifier: blockstate.clone(),
+                bedrock_identifier: block_data.id.clone(),
+                bedrock_states: properties,
+            });
+        }
+        itemstail.push(GeyserItemMapping {
+            java_identifier: block_data.id.clone(),
+            bedrock_identifier: block_data.id,
+            bedrock_data: 0,
+        });
     }
 
     // write blocks
@@ -953,4 +916,79 @@ fn main() {
         &importer.flipbook_textures,
     )
     .unwrap();
+
+    // write blockmappings
+    serde_json::to_writer_pretty(
+        File::create("blockstail.json").unwrap(),
+        &blockstail,
+    )
+    .unwrap();
+
+    // write itemmappings
+    serde_json::to_writer_pretty(
+        File::create("itemstail.json").unwrap(),
+        &itemstail,
+    )
+    .unwrap();
+}
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize)]
+struct ExportBlocks(
+    #[serde_as(as = "KeyValueMap<_>")]
+    Vec<ExportBlock>
+);
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ExportBlock {
+    #[serde(rename = "$key$")]
+    id: String,
+    luminance: u8,
+    hardness: f32,
+    map_color: u32,
+    outline_shape: ExportBlockShape,
+    collision_shape: ExportBlockShape,
+    burnable: bool,
+    opacity: u32,
+    opaque_full_cube: bool,
+    blast_resistance: f32,
+    properties: Vec<ExportBlockProperty>
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ExportBlockProperty {
+    first: String,
+    second: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ExportBlockShape {
+    min_x: f32,
+    min_y: f32,
+    min_z: f32,
+    max_x: f32,
+    max_y: f32,
+    max_z: f32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct GeyserBlockMapping {
+    java_identifier: String,
+    bedrock_identifier: String,
+    bedrock_states: BTreeMap<String, GeyserBlockMappingProperty>
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+enum GeyserBlockMappingProperty {
+    Bool(bool),
+    Int(u32),
+    Enum(String)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct GeyserItemMapping {
+    java_identifier: String,
+    bedrock_identifier: String,
+    bedrock_data: u32,
 }
